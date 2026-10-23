@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analog-layout-diff"
+version = "0.11.2"
+description = "Git snapshots and semantic diffs for Virtuoso analog layouts"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+verify = ["pytest>=7", "klayout>=0.30"]
+
+[project.scripts]
+layout-diff = "layoutdiff.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["layoutdiff*"]
+
+[tool.setuptools.package-data]
+layoutdiff = ["*.il", "native_source.sha256"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

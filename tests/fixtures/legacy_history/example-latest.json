@@ -1,0 +1,48 @@
+{
+  "schema": "analog-layout-diff/1",
+  "objects": {
+    "rect:cd0e2417cc08238836a3625eb2f5e7cdb0d207e518f167619b7e3295275a95ad:0": {
+      "kind": "rect",
+      "layerName": "M1",
+      "purpose": "drawing",
+      "bBox": [
+        [
+          40,
+          0
+        ],
+        [
+          140,
+          200
+        ]
+      ],
+      "net": "SIGNAL",
+      "props": []
+    },
+    "cell:": {
+      "kind": "cell",
+      "name": "",
+      "dbuPerUU": 1000,
+      "userUnits": "micron",
+      "technology": "EXAMPLE_TECH",
+      "props": []
+    },
+    "label:eba0cfd3833c23936ec4c7fbb89b45d5ea6f2f145b0dd563729b36b17ba6d1bf:0": {
+      "kind": "label",
+      "layerName": "M1",
+      "purpose": "drawing",
+      "xy": [
+        0,
+        0
+      ],
+      "text": "synthetic",
+      "orient": "R0",
+      "height": 100,
+      "props": []
+    },
+    "net:SIGNAL": {
+      "kind": "net",
+      "name": "SIGNAL",
+      "props": []
+    }
+  }
+}

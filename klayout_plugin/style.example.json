@@ -1,0 +1,7 @@
+{
+  "background": "#ffffff",
+  "unchanged": {"color": "#8b95a5", "fill": true, "line_style": 0, "width": 1},
+  "changed": {"color": "#e38b16", "fill": true, "line_style": 0, "width": 2},
+  "added": {"color": "#169b62", "fill": true, "line_style": 0, "width": 2},
+  "removed": {"color": "#d13c4b", "fill": false, "line_style": 1, "width": 2}
+}

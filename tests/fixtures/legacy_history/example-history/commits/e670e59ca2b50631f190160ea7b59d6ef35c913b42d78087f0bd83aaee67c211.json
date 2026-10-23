@@ -1,0 +1,52 @@
+{
+  "schema": "analog-layout-diff/1/commit",
+  "parent": null,
+  "base": "64627fe6d281910af1e7a0816a2132c949280e5e3fcdb5f3202d4de9042f5d1f",
+  "result": "f284d036d70354a17d8816c8570a71b9b8fec33396493c2435dae9fd8eb85ff8",
+  "message": "Synthetic revision 1",
+  "operations": [
+    {
+      "key": "cell:",
+      "before": null,
+      "after": {
+        "kind": "cell",
+        "name": "",
+        "dbuPerUU": 1000,
+        "userUnits": "micron",
+        "technology": "EXAMPLE_TECH",
+        "props": []
+      }
+    },
+    {
+      "key": "net:SIGNAL",
+      "before": null,
+      "after": {
+        "kind": "net",
+        "name": "SIGNAL",
+        "props": []
+      }
+    },
+    {
+      "key": "rect:1434edecf9834ea4bf421feb7eac0f5deaa6624b7d63662f6eaa808b259b0968:0",
+      "before": null,
+      "after": {
+        "kind": "rect",
+        "layerName": "M1",
+        "purpose": "drawing",
+        "bBox": [
+          [
+            0,
+            0
+          ],
+          [
+            100,
+            200
+          ]
+        ],
+        "net": "SIGNAL",
+        "props": []
+      }
+    }
+  ],
+  "id": "e670e59ca2b50631f190160ea7b59d6ef35c913b42d78087f0bd83aaee67c211"
+}

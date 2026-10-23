@@ -1,0 +1,490 @@
+{
+  "before": [
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        0,
+        0
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N0",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        10000,
+        5000
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N1",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        20000,
+        10000
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N2",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        30000,
+        0
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N3",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        40000,
+        5000
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N4",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        50000,
+        10000
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N5",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        60000,
+        0
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N6",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        70000,
+        5000
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N7",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        80000,
+        10000
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N8",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        90000,
+        0
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N9",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        100000,
+        5000
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N10",
+      "props": []
+    }
+  ],
+  "after": [
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        400,
+        200
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N0",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        10400,
+        5200
+      ],
+      "params": [
+        [
+          "cutRows",
+          4
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N1",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        20400,
+        10200
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N2",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        30400,
+        200
+      ],
+      "params": [
+        [
+          "cutRows",
+          4
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N3",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        40400,
+        5200
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N4",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        50400,
+        10200
+      ],
+      "params": [
+        [
+          "cutRows",
+          4
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N5",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        60400,
+        200
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N6",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        70400,
+        5200
+      ],
+      "params": [
+        [
+          "cutRows",
+          4
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N7",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        80400,
+        10200
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N8",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        90400,
+        200
+      ],
+      "params": [
+        [
+          "cutRows",
+          4
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R0",
+      "net": "N9",
+      "props": []
+    },
+    {
+      "kind": "stdVia",
+      "viaDef": "M2_M1",
+      "purpose": "drawing",
+      "origin": [
+        100400,
+        5200
+      ],
+      "params": [
+        [
+          "cutRows",
+          2
+        ],
+        [
+          "cutColumns",
+          3
+        ]
+      ],
+      "orient": "R90",
+      "net": "N10",
+      "props": []
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+*.egg-info/
+.venv/
+.test-tmp*/
+.env
+.env.*
+*.log
+.artifacts/
+/artifacts/
+/build/
+evidence/
+/gui-workspace/
+/example-history/
+/example-latest.json
+/native-performance/build/
+/native-performance/layoutdiff-native
+/native-performance/layoutdiff-native.exe
+/native-performance/layoutdiff-native.json
+/native-performance/layoutdiff-native.exe.json
+
+# Local agent instructions, private notes and recovery material
+/.local/
+/AGENTS.md

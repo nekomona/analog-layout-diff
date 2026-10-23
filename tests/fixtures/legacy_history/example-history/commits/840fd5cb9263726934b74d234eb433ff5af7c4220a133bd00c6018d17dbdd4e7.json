@@ -1,0 +1,52 @@
+{
+  "schema": "analog-layout-diff/1/commit",
+  "parent": "d3f5a597d9aa5530d40ccf07d63f0e6e43e78684651af60d90f202a5e0f2d53f",
+  "base": "3e7127df71cc3a370ec0a3d83cfee3935ac2deb1d2937e838de9946f32167b06",
+  "result": "c90c120ee905095be4f324484a187fdee548256312fd5cbcb280ccbc11067c0b",
+  "message": "Synthetic revision 3",
+  "operations": [
+    {
+      "key": "rect:7654e8f73443ac1a6c0525db9c825aeb9a5f8981a7bdd74ec63d8f7d195c1252:0",
+      "before": {
+        "kind": "rect",
+        "layerName": "M1",
+        "purpose": "drawing",
+        "bBox": [
+          [
+            20,
+            0
+          ],
+          [
+            120,
+            200
+          ]
+        ],
+        "net": "SIGNAL",
+        "props": []
+      },
+      "after": null
+    },
+    {
+      "key": "rect:cd0e2417cc08238836a3625eb2f5e7cdb0d207e518f167619b7e3295275a95ad:0",
+      "before": null,
+      "after": {
+        "kind": "rect",
+        "layerName": "M1",
+        "purpose": "drawing",
+        "bBox": [
+          [
+            40,
+            0
+          ],
+          [
+            140,
+            200
+          ]
+        ],
+        "net": "SIGNAL",
+        "props": []
+      }
+    }
+  ],
+  "id": "840fd5cb9263726934b74d234eb433ff5af7c4220a133bd00c6018d17dbdd4e7"
+}
