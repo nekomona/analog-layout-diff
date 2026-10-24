@@ -391,7 +391,7 @@ class GuiWorker:
         self.execute('ALDGUIStatus("Style updated")')
         return {'packets': packets, 'categories': list(validated)}
 
-    def group_boundaries(self, before, after, classification, token):
+    def group_boundaries(self, before, after, classification, token, *, definition_source=None):
         from .review_groups import boundary_targets
         changes = classification['group_changes']
         deleted = [k for k in classification['removed'] if before['objects'][k]['kind'] in VISUAL]
@@ -415,7 +415,8 @@ class GuiWorker:
             adapter = VirtuosoAdapter(self.client, self.adapter.artifacts, writable_library=self.review_library)
             try:
                 self.execute('ALDGUIStatus("Building deleted-object shadows")')
-                adapter.reconstruct(before, self.review_library, cell, review_token=old_token)
+                adapter.reconstruct(before, self.review_library, cell, review_token=old_token,
+                                    group_definition_source=definition_source)
                 collect(before, 'before', old_token)
                 if deleted:
                     result = loads(self.execute(f'ALDGUIPrepareShadows({sk(old_token)} {sk(token)} {sk(deleted)})'))
@@ -462,8 +463,10 @@ class GuiWorker:
             packets.append([group, packet])
             icons.append([group, icon])
         try:
-            actual = self.adapter.reconstruct(after, self.review_library, cell, review_token=token)
-            boundaries, boundary_warnings, shadows = self.group_boundaries(before, after, classification, token)
+            actual = self.adapter.reconstruct(after, self.review_library, cell, review_token=token,
+                                              group_definition_source=identity)
+            boundaries, boundary_warnings, shadows = self.group_boundaries(
+                before, after, classification, token, definition_source=identity)
             boundary_counts = {s: sum(r['status'] == s for r in boundaries) for s in ('new', 'changed', 'deleted')}
             counts = classification["counts"]
             summary = (f"Commit {commit_id[:12]}\n{'/'.join(identity)}\n"
@@ -486,6 +489,7 @@ class GuiWorker:
             atomic_json(artifacts / "review.json", {**self.reviews[token], "library": self.review_library,
                         "token": token, "warnings": self.adapter.last_dependency_warnings,
                         "readback_normalization": self.adapter.last_readback_normalization,
+                        "group_definition_context": self.adapter.last_group_context,
                         "group_boundaries": boundaries, "boundary_warnings": boundary_warnings,
                         "deleted_shadows": shadows,
                         "counts": counts, "summary": summary})

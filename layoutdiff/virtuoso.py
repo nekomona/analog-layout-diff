@@ -89,6 +89,7 @@ class VirtuosoAdapter:
         self.hierarchy = HierarchyReader(client, self.artifacts, checked)
         self.last_dependency_warnings = []
         self.last_readback_normalization = None
+        self.last_group_context = None
 
     def capture(self, lib, cell, view="layout", *, dependencies=True):
         if not self.loaded:
@@ -151,7 +152,33 @@ class VirtuosoAdapter:
             emit_warnings(issues)
         return issues
 
-    def reconstruct(self, snapshot, lib, cell, view="layout", *, review_token=None):
+    def prepare_group_context(self, snapshot, source=None):
+        """Import persisted OA group definitions by reading their source view.
+
+        These definitions are session state: dbCreateGroup requires them even
+        when an empty group is being restored. Reading the source registers
+        its persisted definitions; loading Layout XL alone is insufficient.
+        No source geometry, properties or edit mode are changed.
+        """
+        required = sorted({r['defName'] for r in snapshot['objects'].values()
+                           if r['kind'] == 'group' and r['defName'] != 'unrestricted'})
+        context = dict(required=required, source=list(source) if source else None,
+                       loaded=False, source_definitions=[])
+        if not required or source is None:
+            return context
+        if len(source) != 3 or not all(isinstance(part, str) and part for part in source):
+            raise ValueError('Group-definition source must be a library/cell/view identity')
+        args = ' '.join(sk(part) for part in source)
+        result = loads(checked(self.client.execute_skill(
+            f'let((cv names) cv=when(ddGetObj({args}) '
+            f'dbOpenCellViewByType({args} "maskLayout" "r")) '
+            'if(cv then unwindProtect(progn(names=foreach(mapcar g cv~>groups g~>defName) '
+            'list(t names)) dbClose(cv)) else list(nil nil)))', timeout=120)))
+        context.update(loaded=bool(result[0]), source_definitions=sorted(set(result[1] or [])))
+        return context
+
+    def reconstruct(self, snapshot, lib, cell, view="layout", *, review_token=None,
+                    group_definition_source=None):
         self.last_readback_normalization = None
         validate(snapshot)
         issues = coverage(snapshot)
@@ -165,6 +192,7 @@ class VirtuosoAdapter:
         exists = checked(self.client.execute_skill(f"ddGetObj({sk(lib)} {sk(cell)} {sk(view)})"))
         if exists.strip() != "nil":
             raise ValueError("Destination already exists; reconstruction only creates fresh cells")
+        self.last_group_context = self.prepare_group_context(snapshot, group_definition_source)
         self.last_dependency_warnings = self.check_dependencies(snapshot)
         commands = render(snapshot, review_token=review_token)
         build_id = uuid.uuid4().hex
@@ -177,10 +205,24 @@ class VirtuosoAdapter:
         source.write_text(source_text, encoding="utf-8")
         try:
             checked(self.client.load_il(source))
+            checked(self.client.execute_skill('ALDReplayGroupFailure=nil'))
             # The explicit bridge create context balances the owned open and save.
-            with self.client.layout.create(lib, cell, view=view, timeout=120) as edit:
-                edit.commands[0] = f"when(ddGetObj({sk(lib)} {sk(cell)} {sk(view)}) error(\"Destination already exists\")) " + edit.commands[0]
-                edit.add(function + "(cv)")
+            try:
+                with self.client.layout.create(lib, cell, view=view, timeout=120) as edit:
+                    edit.commands[0] = f"when(ddGetObj({sk(lib)} {sk(cell)} {sk(view)}) error(\"Destination already exists\")) " + edit.commands[0]
+                    edit.add(function + "(cv)")
+            except RuntimeError as exc:
+                try:
+                    failure = loads(checked(self.client.execute_skill(
+                        "when(boundp('ALDReplayGroupFailure) ALDReplayGroupFailure)")))
+                except Exception:
+                    failure = None
+                if isinstance(failure, list) and len(failure) == 2:
+                    raise ValueError(f'Cannot reconstruct logical group {failure[0]!r} '
+                                     f'with definition {failure[1]!r}. Read a source layout '
+                                     'containing that definition in this Virtuoso session '
+                                     'before replay; custom definitions must be available.') from exc
+                raise
         finally:
             # Release generated bodies on both success and partial load failure.
             for offset in range(0, len(helpers), 64):
@@ -329,7 +371,11 @@ def render(snapshot, *, review_token=None):
             expr = f"dbCreateLabel(cv {lpp} {sk(dim(r['xy']))} {sk(r['theLabel'])} {sk(r['justify'])} {sk(r['orient'])} {sk(r['font'])} {sk(dim(r['height']))})"
         else:
             raise ValueError("Unsupported kind " + kind)
-        commands.append(f"o={expr} unless(o error(\"Creation failed: {kind}\"))")
+        if kind == 'group':
+            commands.append(f'o={expr} unless(o ALDReplayGroupFailure={sk([r["name"], r["defName"]])} '
+                            f'error("Creation failed: group %s (definition %s)" {sk(r["name"])} {sk(r["defName"])}))')
+        else:
+            commands.append(f"o={expr} unless(o error(\"Creation failed: {kind}\"))")
         if has_logical_groups:
             commands.append(f"figures[{sk(key)}]=o")
         if review_token:
