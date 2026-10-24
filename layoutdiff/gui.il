@@ -437,6 +437,10 @@ procedure(ALDGUIOpenReview(token lib cell source assignments packets icons summa
     unless(dbReopen(ALDGUIHeld[token] "r") error("Cannot set review cell read-only"))
     win=deOpenCellView(lib cell "layout" "maskLayout" nil "r")
     unless(win error("Cannot open review window"))
+    ; Window-local display settings keep the base layout behind the overlays.
+    win->dimmingOn=t
+    win->dimmingScope="all"
+    win->dimmingIntensity=50
     ALDGUIAttach(win)
     state=ALDGUIWindows[win] state['review]=token state['source]=source
     state['expiredReview]=nil
@@ -466,14 +470,14 @@ procedure(ALDGUIOpenReview(token lib cell source assignments packets icons summa
         foreach(primitive cadr(ALDGUIShadowData[token])
           unless(ALDGUIDrawShadow(hl primitive) error("Cannot draw deleted-object shadow"))
           state['populated][group]=t))
-      state['visible][group]=t
-      hl->enable=t)
+      state['visible][group]=(group!="untouched")
+      hl->enable=state['visible][group])
     state['groupsEnabled]=t
     bar=hiCreateToolbar(?name concat(sprintf(nil "aldReviewToolbar%d" n)) ?title "Layout Diff Review"
       ?toolButtonStyle 'textBesideIcon
       ?items list(
         hiCreateAction(?name 'untouched ?iconText "Untouched" ?icon cadr(assoc("untouched" icons))
-          ?checkable t ?checked t ?callback sprintf(nil "ALDGUIToggle(window(%d) \"untouched\")" n))
+          ?checkable t ?checked nil ?callback sprintf(nil "ALDGUIToggle(window(%d) \"untouched\")" n))
         hiCreateAction(?name 'changed ?iconText "Modified" ?icon cadr(assoc("changed" icons))
           ?checkable t ?checked t ?callback sprintf(nil "ALDGUIToggle(window(%d) \"changed\")" n))
         hiCreateAction(?name 'netChanged ?iconText "Modified net" ?icon cadr(assoc("netChanged" icons))
