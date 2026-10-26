@@ -2,6 +2,8 @@
 unless(boundp('ALDGUILeases) ALDGUILeases=makeTable('aldLeases nil))
 unless(boundp('ALDGUILeaseTimer) ALDGUILeaseTimer=nil)
 unless(boundp('ALDGUIActiveLease) ALDGUIActiveLease=nil)
+unless(boundp('ALDGUIBusyActive) ALDGUIBusyActive=nil)
+unless(boundp('ALDGUIBusyText) ALDGUIBusyText=nil)
 
 procedure(ALDGUILeaseBegin(token path)
   let((state)
@@ -70,17 +72,36 @@ procedure(ALDGUILeaseTick()
       when(ALDGUILeases[token] pending=t))
     when(pending ALDGUILeaseTimer=t hiRegTimer("ALDGUILeaseTick()" 10)) t))
 
-procedure(ALDGUIBusyStart(text)
-  unless(boundp('ALDGUIBusyForm) && ALDGUIBusyForm
+procedure(ALDGUIBrowserSetStatus(form text)
+  form->aldIdleStatus=text
+  form->aldBrowserStatus->value=if(ALDGUIBusyActive then strcat("Loading: " ALDGUIBusyText) else text))
+
+procedure(ALDGUIBusyUpdate(text)
+  when(ALDGUIBusyActive
+    ALDGUIBusyText=text
+    when(boundp('ALDGUIHistoryForm) && ALDGUIHistoryForm
+      ALDGUIHistoryForm->aldBrowserStatus->value=strcat("Loading: " text))
+    when(boundp('ALDGUIBusyForm) && ALDGUIBusyForm ALDGUIBusyForm->aldBusyText->value=text)))
+
+procedure(ALDGUIBusyStart(text @optional (popup nil))
+  ALDGUIBusyActive=t
+  ALDGUIBusyUpdate(text)
+  if(popup then
+    unless(boundp('ALDGUIBusyForm) && ALDGUIBusyForm
     ALDGUIBusyForm=hiCreateLayoutForm('ALDGUIBusyForm "Layout Diff - Loading"
       hiCreateVerticalBoxLayout('aldBusyLayout ?margins '(16 16 16 16) ?items list(
         hiCreateStringField(?name 'aldBusyText ?prompt "" ?editable nil)
         hiCreateLabel(?name 'aldBusyHint ?labelText "Working... You can hide this window; the operation will continue.")))
       ?initialSize '(650 150) ?buttonLayout 'Close ?dialogStyle 'modeless))
-  ALDGUIBusyForm->aldBusyText->value=text hiDisplayForm(ALDGUIBusyForm))
+    ALDGUIBusyForm->aldBusyText->value=text hiDisplayForm(ALDGUIBusyForm)
+  else
+    when(boundp('ALDGUIBusyForm) && ALDGUIBusyForm hiFormCancel(ALDGUIBusyForm))))
 
 procedure(ALDGUIBusyDone()
-  when(boundp('ALDGUIBusyForm) && ALDGUIBusyForm hiFormCancel(ALDGUIBusyForm)))
+  ALDGUIBusyActive=nil ALDGUIBusyText=nil
+  when(boundp('ALDGUIBusyForm) && ALDGUIBusyForm hiFormCancel(ALDGUIBusyForm))
+  when(boundp('ALDGUIHistoryForm) && ALDGUIHistoryForm
+    ALDGUIHistoryForm->aldBrowserStatus->value=or(ALDGUIHistoryForm->aldIdleStatus "Ready")))
 
 procedure(ALDGUIRestoreConfirm(token text)
   unless(boundp('ALDGUIRestoreForm) && ALDGUIRestoreForm

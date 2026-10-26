@@ -102,7 +102,7 @@ procedure(ALDGUIBrowserLoad(token identity sources sourceIndex repository rows i
       hiReportSelectItem(form->aldViews->page1->aldCommits 0 nil) form->aldSelectedCommit=car(ids)
       form->aldPatch->value="Loading commit..."
     else form->aldPatch->value="No recorded commits for this layout. Use Save & Commit from an editable source layout.")
-    form->aldBrowserStatus->value=sprintf(nil "%d revisions | A added, M modified, D deleted, MN modified net. M excludes MN. Full diffs and snapshots retain all fields." length(ids))
+    ALDGUIBrowserSetStatus(form sprintf(nil "%d revisions | A added, M modified, D deleted, MN modified net. M excludes MN. Full diffs and snapshots retain all fields." length(ids)))
     form->aldLoading=nil form->aldOpen=t
     hiDisplayForm(form)))
 
@@ -246,7 +246,7 @@ procedure(ALDGUIRepositoryLoad(token repository refs refIndex rows ids limit)
     form->aldViews->page2->aldGraph->choices=rows form->aldViews->page2->aldChangedCells->choices=nil ALDGUIBrowserClear(form)
     when(ids hiReportSelectItem(form->aldViews->page2->aldGraph 0 nil) form->aldSelectedCommit=car(ids))
     form->aldMore->enabled=length(ids)>=limit
-    form->aldBrowserStatus->value=sprintf(nil "%d commits shown. Select a commit, then a changed cell. Merge changes compare with the first parent." length(ids))
+    ALDGUIBrowserSetStatus(form sprintf(nil "%d commits shown. Select a commit, then a changed cell. Merge changes compare with the first parent." length(ids)))
     form->aldLoading=nil form->aldOpen=t hiDisplayForm(form)))
 
 procedure(ALDGUIRepositoryRef(form)

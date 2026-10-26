@@ -42,13 +42,16 @@ TASK_LABELS = {
     'restore-prepare': 'Preparing and verifying checkpoint...',
     'restore-apply': 'Restoring layout checkpoint...',
     'quick-preview': 'Reading the saved layout and preparing the commit preview...',
+    'git-setup': 'Configuring Git and preparing the commit preview...',
     'quick-commit': 'Verifying the preview and committing to Git...',
     'history': 'Loading cell history...', 'browser': 'Loading cell history...',
     'repository': 'Loading Git history...', 'repository-select': 'Loading changed cells...',
     'repository-cell': 'Computing layout changes...', 'browser-select': 'Computing layout changes...',
     'browser-full': 'Preparing the full diff...', 'quick-full': 'Preparing the full diff...',
+    'browser-file': 'Loading the file diff...', 'browser-category': 'Loading change details...',
     'cleanup': 'Cleaning temporary reviews...',
 }
+POPUP_TASKS = {'quick-preview', 'quick-commit', 'git-setup'}
 
 
 def style_settings(settings):
@@ -618,7 +621,7 @@ class GuiWorker:
         with self.work_area():
             label = TASK_LABELS.get(request[0])
             if label:
-                self.execute(f'ALDGUIBusyStart({sk(label)})')
+                self.execute(f'ALDGUIBusyStart({sk(label)} {sk(request[0] in POPUP_TASKS)})')
             try:
                 return self._dispatch(request)
             finally:

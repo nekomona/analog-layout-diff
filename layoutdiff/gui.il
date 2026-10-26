@@ -164,7 +164,9 @@ procedure(ALDGUIUnsupported(text path summaryPath)
 procedure(ALDGUIStatus(text)
   let((bar)
     printf("Layout Diff: %s\n" text)
-    when(boundp('ALDGUIBusyForm) && ALDGUIBusyForm ALDGUIBusyForm->aldBusyText->value=text)
+    if(ALDGUIBusyActive then ALDGUIBusyUpdate(text)
+    else when(boundp('ALDGUIHistoryForm) && ALDGUIHistoryForm
+      ALDGUIHistoryForm->aldBrowserStatus->value=text))
     when(boundp('ALDRuntimeMenu) ALDRuntimeActivity(text))
     foreach(win hiGetWindowList()
       when(ALDGUIWindows[win]
@@ -175,9 +177,17 @@ procedure(ALDGUIEnqueue(request)
   if(car(request)=="logs" && boundp('ALDRuntimeMenu) then ALDRuntimeLogs()
   else if(ALDGUIOwner && (!boundp('ALDRuntimeState) || ALDRuntimeState=="Running") then
     ALDGUIQueue=append(ALDGUIQueue list(request))
-    when(member(car(request) '("review" "quick-preview" "restore-prepare" "restore-apply" "browser" "history" "repository"))
-      ALDGUIBusyStart("Loading... Request queued"))
+    when(member(car(request) '("browser" "history" "repository"))
+      let((form)
+        form=ALDGUIBrowserCreate()
+        unless(form->aldOpen
+          form->aldOpen=t form->aldMore->enabled=nil hiDisplayForm(form))))
     ALDGUIStatus("Queued...")
+    when(member(car(request) '("review" "quick-preview" "quick-commit" "git-setup" "restore-prepare" "restore-apply"
+      "browser" "history" "repository" "repository-select" "repository-cell" "browser-select"
+      "browser-file" "browser-category" "browser-full" "quick-full" "cleanup"))
+      unless(ALDGUIBusyActive
+        ALDGUIBusyStart("Request queued..." member(car(request) '("quick-preview" "quick-commit" "git-setup")))))
   else
     if(boundp('ALDRuntimeMenu) then ALDRuntimePanel()
     else ALDGUINotice("Load the Layout Diff startup.il plugin in CIW.")))))
