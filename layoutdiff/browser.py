@@ -40,7 +40,7 @@ def diff_html(text):
 
 
 class HistoryBrowser:
-    def __init__(self, history, identity, repo=None):
+    def __init__(self, history, identity, repo=None, *, revisions=None):
         self.history, self.identity, self.repo = history, identity, repo
         self.metadata = {}
         self.category_cache = OrderedDict()
@@ -49,7 +49,7 @@ class HistoryBrowser:
         self.store = GitSnapshots(repo, identity) if repo else None
         if self.store:
             self.commits = []
-            for sha in self.store.revisions():
+            for sha in self.store.revisions() if revisions is None else revisions:
                 meta = self.store.metadata(sha)
                 self.metadata[sha] = meta
                 self.commits.append({"id": sha, "parent": next(iter(meta["parents"]), None),
@@ -159,3 +159,73 @@ class HistoryBrowser:
             commit = self.by_id[detail["id"]]
             return f"--- HEAD\n+++ HEAD\n-{commit['parent'] or '(empty)'}\n+{commit['id']}\n"
         return textconv(self.by_id[detail["id"]])
+
+
+class RepositoryBrowser:
+    """Pinned refs and commit graph; compare each commit with its first parent.
+
+    No checkout/index changes. Cells are grouped across all v2 component files.
+    Non-layout commits remain visible and have an empty changed-cell list.
+    """
+    def __init__(self, repo):
+        from .gitstore import head
+        self.repo = repo
+        self.refs = []
+        if head(repo):
+            self.refs.append(["HEAD", head(repo)])
+        raw = git(repo, "for-each-ref", "--format=%(refname)%00%(objectname)",
+                  "refs/heads", "refs/remotes", "refs/tags").stdout.decode()
+        for line in raw.splitlines():
+            name, _ = line.split("\0")
+            resolved = git(repo, "rev-parse", "--verify", name + "^{commit}", check=False)
+            if resolved.returncode == 0:
+                self.refs.append([name, resolved.stdout.decode().strip()])
+        self.commits = {}
+
+    def history(self, ref_index=0, limit=500):
+        if not self.refs:
+            return [], []
+        sha = self.refs[int(ref_index)][1]
+        raw = git(self.repo, "log", "--graph", "--topo-order", f"--max-count={int(limit)}",
+                  "--format=%x1e%H%x1f%P%x1f%an%x1f%aI%x1f%s%x1f%D", sha).stdout.decode("utf-8", errors="replace")
+        rows, ids = [], []
+        for line in raw.split("\n"):
+            if "\x1e" not in line:
+                continue
+            graph, record = line.split("\x1e", 1)
+            oid, parents, author, date, message, refs = record.split("\x1f", 5)
+            self.commits[oid] = dict(id=oid, parents=parents.split(), message=message)
+            ids.append(oid)
+            rows.append([graph + oid[:10], message, author, date[:19].replace("T", " "), refs])
+        return rows, ids
+
+    def cells(self, revision):
+        from .gitstore import path_identity, blob, check_identity
+        from .core import digest
+        commit = self.commits[revision]
+        revisions = [*commit['parents'][:1], revision]
+        raw = git(self.repo, "diff-tree", "--root", "--no-commit-id", "-r", "--no-renames",
+                  "--name-only", "-z", *revisions).stdout.decode("utf-8").split("\0")
+        identities = set()
+        for path in raw:
+            identity = path_identity(path)
+            if identity:
+                identities.add(tuple(identity))
+            elif path.startswith('.layoutdiff/histories/'):
+                parts = path.split('/')
+                if len(parts) == 4 and parts[-1] in {'latest.layout.json', 'source.json'}:
+                    source = '/'.join(parts[:3]) + '/source.json'
+                    data = blob(self.repo, revision, source)
+                    if data is None and commit['parents']:
+                        data = blob(self.repo, commit['parents'][0], source)
+                    if data:
+                        import json
+                        identity = json.loads(data); check_identity(identity)
+                        if digest(identity) == parts[2]:
+                            identities.add(tuple(identity))
+        return [list(v) for v in sorted(identities)]
+
+    def cell_model(self, revision, identity):
+        if identity not in self.cells(revision):
+            raise ValueError("Cell is not modified in this commit")
+        return HistoryBrowser(None, identity, self.repo, revisions=[revision])

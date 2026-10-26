@@ -9,6 +9,9 @@ import time
 import uuid
 import zlib
 import tempfile
+import contextlib
+import shlex
+import shutil
 from pathlib import Path
 from .core import digest
 from .history import History, read_json, atomic_json
@@ -19,7 +22,7 @@ from .support import UnsupportedContentError
 from .paths import scratch
 from . import gitcommit
 from . import gitstore
-from .browser import HistoryBrowser, field_text, diff_html
+from .browser import HistoryBrowser, RepositoryBrowser, field_text, diff_html
 from .categories import CategoryDiff, snapshot_changes
 
 COLORS = {"Gray": (150, 163, 180), "Orange": (255, 165, 0), "Green": (64, 235, 125),
@@ -33,6 +36,19 @@ DEFAULTS = {"untouched": ["Gray", "Solid", "1", "Steady"], "changed": ["Orange",
             "groupNew": ["Green", "Dash-dot", "3", "Steady"],
             "groupChanged": ["Yellow", "Dash-dot", "3", "Steady"],
             "groupDeleted": ["Red", "Dashed", "3", "Steady"]}
+
+TASK_LABELS = {
+    'review': 'Preparing layout review...',
+    'restore-prepare': 'Preparing and verifying checkpoint...',
+    'restore-apply': 'Restoring layout checkpoint...',
+    'quick-preview': 'Reading the saved layout and preparing the commit preview...',
+    'quick-commit': 'Verifying the preview and committing to Git...',
+    'history': 'Loading cell history...', 'browser': 'Loading cell history...',
+    'repository': 'Loading Git history...', 'repository-select': 'Loading changed cells...',
+    'repository-cell': 'Computing layout changes...', 'browser-select': 'Computing layout changes...',
+    'browser-full': 'Preparing the full diff...', 'quick-full': 'Preparing the full diff...',
+    'cleanup': 'Cleaning temporary reviews...',
+}
 
 
 def style_settings(settings):
@@ -86,6 +102,11 @@ class GuiWorker:
         self.lock_registry = None
         self.git_scratch = None
         self.browser_state = None
+        self.repository_browser = None
+        self.restore_plans = {}
+        self.active_work = None
+        self.temp_session = None
+        self.legacy_cleanup_at = 0
         if (self.root / "performance.json").exists():
             mode = read_json(self.root / "performance.json").get("mode", "auto")
             if mode not in {"auto", "python", "native"}:
@@ -113,6 +134,7 @@ class GuiWorker:
         return checked(self.client.execute_skill("progn(" + expression + ")", timeout=120))
 
     def install(self):
+        checked(self.client.load_il(Path(__file__).with_name("workflow.il")))
         checked(self.client.load_il(Path(__file__).with_name("gui.il")))
         checked(self.client.load_il(Path(__file__).with_name("browser.il")))
         self.execute("when(ALDGUIOwner ALDGUIStop(ALDGUIOwner))")
@@ -148,10 +170,57 @@ class GuiWorker:
             model = HistoryBrowser(None, identity, repo)
             if model.commits or not self.history(identity).path.exists():
                 return model
+            model.close()
         return HistoryBrowser(self.history(identity), identity)
 
     def notice(self, message):
         self.execute(f"ALDGUINotice({sk(field_text(message, limit=6000))})")
+
+    @contextlib.contextmanager
+    def work_area(self):
+        from .workspace import allocate, new_session
+        if self.active_work:
+            yield self.active_work
+            return
+        if self.temp_session is None:
+            self.temp_session = new_session()
+        token, path = allocate(self.temp_session)
+        (path / 'transport').mkdir()
+        remote = str(path)
+        if not getattr(self.client, 'layoutdiff_local_files', False):
+            remote = '/tmp/' + self.temp_session.name + '/work/' + token
+            result = self.client.ssh_runner.run_command('mkdir -p ' + shlex.quote(remote + '/transport'))
+            if result.returncode:
+                raise RuntimeError(result.stderr)
+        old_scratch = getattr(self.client, 'layoutdiff_scratch', None)
+        old_artifacts, old_lib = self.adapter.artifacts, self.review_library
+        self.active_work = {'token': token, 'path': path, 'remote': remote}
+        self.client.layoutdiff_scratch = lambda name: remote + '/transport/' + name
+        self.adapter.artifacts = self.adapter.hierarchy.artifacts = path
+        try:
+            self.execute(f'ALDGUILeaseBegin({sk(token)} {sk(remote)})')
+            atomic_json(path / 'lease.json', {'token': token, 'path': str(path), 'armed': True})
+            yield self.active_work
+        finally:
+            try:
+                self.execute(f'ALDGUILeaseSeal({sk(token)})')
+            finally:
+                self.adapter.artifacts = self.adapter.hierarchy.artifacts = old_artifacts
+                self.review_library = self.adapter.writable_library = old_lib
+                if old_scratch is None:
+                    del self.client.layoutdiff_scratch
+                else:
+                    self.client.layoutdiff_scratch = old_scratch
+                self.active_work = None
+
+    def temporary_library(self, technology):
+        work = self.active_work
+        if not work:
+            raise ValueError('A temporary work area is required')
+        lib = 'ALD_TMP_' + work['token'][:16]
+        self.execute(f'ALDGUILeaseLibrary({sk(work["token"])} {sk(lib)})')
+        self.client.library.create(lib, work['remote'] + '/oa', technology_library=technology)
+        return lib
 
     def close(self):
         for preview in self.previews.values():
@@ -280,6 +349,47 @@ class GuiWorker:
         self.execute('ALDGUIStatus("History loaded")')
         return [{k: c[k] for k in ("id", "parent", "message")} for c in commits]
 
+    def show_repository(self, ref_index=0, limit=500):
+        repo = self.git_repository()
+        if not repo:
+            raise ValueError('No Git repository selected. Use Save & Commit to configure one.')
+        self.repository_browser = RepositoryBrowser(repo)
+        rows, ids = self.repository_browser.history(ref_index, limit)
+        if self.browser_state and self.browser_state['model']:
+            self.browser_state['model'].close()
+        token = uuid.uuid4().hex
+        self.browser_state = {'token': token, 'model': None, 'detail': None, 'git': True}
+        self.execute(f'ALDGUIRepositoryLoad({sk(token)} {sk(str(repo))} '
+                     f'{sk([r[0] for r in self.repository_browser.refs])} {int(ref_index)} '
+                     f'{sk(rows)} {sk(ids)} {int(limit)})')
+        if ids:
+            self.repository_select(token, ids[0])
+        return {'commits': len(ids), 'refs': len(self.repository_browser.refs)}
+
+    def repository_select(self, token, revision):
+        state = self.browser_state
+        if not state or state['token'] != token or not state.get('git'):
+            return {'stale': True}
+        cells = self.repository_browser.cells(revision)
+        if state['model']:
+            state['model'].close()
+        state.update(model=None, detail=None, revision=revision, cells=cells)
+        self.execute(f'ALDGUIRepositoryCells({sk(token)} {sk(revision)} {sk(cells)})')
+        if cells:
+            return self.repository_cell(token, revision, 0)
+        return {'cells': []}
+
+    def repository_cell(self, token, revision, index):
+        state = self.browser_state
+        if not state or state['token'] != token or state.get('revision') != revision:
+            return {'stale': True}
+        identity = state['cells'][int(index)]
+        if state['model']:
+            state['model'].close()
+        state['model'] = self.repository_browser.cell_model(revision, identity)
+        self.execute(f'ALDGUIHistoryForm->aldSource={sk(identity)}')
+        return self.browser_select(token, revision)
+
     @staticmethod
     def history_rows(model):
         return [[*r[:4], *[str(v) for v in r[4:]]] for r in model.rows(lazy=True)]
@@ -312,9 +422,10 @@ class GuiWorker:
             rows.append([item["status"], label, item["added"], item["deleted"]])
         self.execute(f"ALDGUIBrowserDetail({sk(token)} {sk(commit_id)} {sk(field_text(detail['summary']))} "
                      f"{sk(rows)} {sk(detail['categories'])} {sk(diff_html(detail['patch']))})")
-        self.execute(f"ALDGUIBrowserCounts({sk(token)} {sk(commit_id)} {sk(self.history_rows(state['model']))})")
+        if not state.get('git'):
+            self.execute(f"ALDGUIBrowserCounts({sk(token)} {sk(commit_id)} {sk(self.history_rows(state['model']))})")
         if not detail["reviewable"]:
-            self.execute('ALDGUIHistoryForm->aldReview->enabled=nil')
+            self.execute('ALDGUIHistoryForm->aldReview->enabled=nil ALDGUIHistoryForm->aldRestore->enabled=nil')
         return {key: detail[key] for key in ("id", "counts", "kinds", "files", "git", "categories")}
 
     def browser_file(self, token, commit_id, index):
@@ -409,7 +520,7 @@ class GuiWorker:
             # Share one previous-state build for deleted figures and groups.
             old_token = uuid.uuid4().hex
             cell = 'ALD_REVIEW_' + old_token[:16]
-            folder = self.root / 'reviews' / old_token
+            folder = self.adapter.artifacts / 'reviews' / old_token
             atomic_json(folder / 'review.json', {'token': old_token, 'cell': cell,
                         'library': self.review_library, 'purpose': 'deleted-review-overlays'})
             adapter = VirtuosoAdapter(self.client, self.adapter.artifacts, writable_library=self.review_library)
@@ -438,6 +549,9 @@ class GuiWorker:
         return records, issues, shadows
 
     def review(self, identity, commit_id):
+        if not self.active_work:
+            with self.work_area():
+                return self.review(identity, commit_id)
         state = self.browser_state
         model = state["model"] if state and state["model"] and state["model"].identity == identity else self.history_model(identity)
         before, after = model.pair(commit_id)
@@ -445,10 +559,12 @@ class GuiWorker:
             self.notice("This revision deletes the layout snapshot. Select an earlier revision to review its layout.")
             return {"deleted": True, "commit": commit_id}
         classification = classify(before, after)
+        self.review_library = self.temporary_library(after['objects']['cell:']['technology'])
+        self.adapter.writable_library = self.review_library
         token = uuid.uuid4().hex
         cell = "ALD_REVIEW_" + token[:16]
         self.reviews[token] = {"source": identity, "commit": commit_id, "cell": cell}
-        artifacts = self.root / "reviews" / token
+        artifacts = self.adapter.artifacts / "reviews" / token
         artifacts.mkdir(parents=True)
         # Register the destination before creation so interrupted/failed builds
         # can be reclaimed later using the same strict ownership checks.
@@ -499,6 +615,17 @@ class GuiWorker:
             raise
 
     def dispatch(self, request):
+        with self.work_area():
+            label = TASK_LABELS.get(request[0])
+            if label:
+                self.execute(f'ALDGUIBusyStart({sk(label)})')
+            try:
+                return self._dispatch(request)
+            finally:
+                if label:
+                    self.execute('ALDGUIBusyDone()')
+
+    def _dispatch(self, request):
         command, *args = request
         if command in {"backend-info", "backend-config"}:
             from .acceleration import info
@@ -539,6 +666,25 @@ class GuiWorker:
             return self.show_history(args)
         if command == "browser" and len(args) in (0, 3):
             return self.show_history(args)
+        if command == 'repository' and len(args) == 2:
+            return self.show_repository(*args)
+        if command == 'repository-select' and len(args) == 2:
+            return self.repository_select(*args)
+        if command == 'repository-cell' and len(args) == 3:
+            return self.repository_cell(*args)
+        if command == 'browser-close' and len(args) == 1:
+            if self.browser_state and self.browser_state['token'] == args[0]:
+                if self.browser_state['model']:
+                    self.browser_state['model'].close()
+                self.browser_state = None
+                self.repository_browser = None
+            return {'closed': True}
+        if command == 'restore-prepare' and len(args) == 4:
+            return self.restore_prepare(args[:3], args[3])
+        if command == 'restore-apply' and len(args) == 1:
+            return self.restore_apply(args[0])
+        if command == 'restore-cancel' and len(args) == 1:
+            return self.restore_cancel(args[0])
         if command == "browser-select" and len(args) == 2:
             return self.browser_select(*args)
         if command == "browser-file" and len(args) == 3:
@@ -550,8 +696,10 @@ class GuiWorker:
         if command == "review" and len(args) == 4:
             return self.review(args[:3], args[3])
         if command == "style" and len(args) in (5, 6):
+            self.execute(f'ALDGUILeaseWatchReview({sk(args[0])})')
             return self.style(args[0], args[1], args[2:])
         if command == "styles" and len(args) == 2:
+            self.execute(f'ALDGUILeaseWatchReview({sk(args[0])})')
             return self.styles_batch(*args)
         if command == "cleanup" and not args:
             result = self.clean_reviews()
@@ -570,6 +718,18 @@ class GuiWorker:
             return {"log": str(path)}
         raise ValueError("Unknown GUI request")
 
+    def restore_prepare(self, identity, revision):
+        from .restore import prepare
+        return prepare(self, identity, revision)
+
+    def restore_apply(self, token):
+        from .restore import apply
+        return apply(self, token)
+
+    def restore_cancel(self, token):
+        from .restore import cancel
+        return cancel(self, token)
+
     def clean_reviews(self):
         """Remove only recorded, closed temporary review views in the allowed lib."""
         results = []
@@ -587,45 +747,53 @@ class GuiWorker:
                       if(ddGetObj({sk(lib)} {sk(cell)} "layout") then "delete-failed" else "deleted")
                     else "absent")))'''))
             results.append({"cell": cell, "status": status})
+            if status in {'deleted', 'absent'}:
+                # The manifest identity and strict token/path check above are
+                # required before deleting any pre-temp-directory artifacts.
+                shutil.rmtree(manifest.parent)
         atomic_json(self.root / "cleanup.json", results)
         return results
 
     def poll(self):
+        if time.monotonic() >= self.legacy_cleanup_at:
+            self.clean_reviews()
+            self.legacy_cleanup_at = time.monotonic() + 15
         requests = loads(self.execute(f"ALDGUIPoll({sk(self.token)})")) or []
         for request in requests:
-            entry = {"request": request, "time": time.time()}
-            try:
-                entry["result"] = self.dispatch(request)
-            except Exception as exc:
-                entry["error"] = str(exc)
+            with self.work_area():
+                entry = {"request": request, "time": time.time()}
                 try:
-                    self.execute('ALDGUIStatus("Operation failed")')
-                    if isinstance(exc, UnsupportedContentError):
-                        entry["unsupported_counts"] = exc.counts
-                        entry["unsupported_report"] = str(exc.report)
-                        # No field_text truncation: show every unsupported category
-                        # in the scrollable result form, even beyond 6000 bytes.
-                        remote_report = scratch(self.client, exc.report.name)
-                        checked(self.client.upload_file(str(exc.report), remote_report))
-                        message = 'Operation failed: ' + str(exc)
-                        summary_remote = None
-                        # IC23.1 MLTextField accepts at most 8191 bytes. An
-                        # oversized summary opens in the native file viewer in
-                        # full; no categories are dropped from either report.
-                        if len(message.encode("utf-8")) > 7600:
-                            summary = exc.report.with_suffix(".summary.txt")
-                            summary.write_text(message, encoding="utf-8")
-                            summary_remote = scratch(self.client, summary.name)
-                            checked(self.client.upload_file(str(summary), summary_remote))
-                            message = (f"Cannot commit unsupported layout content: {len(exc.counts)} categories.\n"
-                                       "The complete category summary has opened in a text viewer.\n"
-                                       "Use View all unsupported elements for individual records.")
-                        self.execute(f"ALDGUIUnsupported({sk(message)} {sk(remote_report)} {sk(summary_remote)})")
-                    else:
-                        self.notice("Operation failed: " + str(exc))
-                except Exception as notification:
-                    entry["notification_error"] = str(notification)[:2000]
-            atomic_json(self.root / "requests" / (uuid.uuid4().hex + ".json"), entry)
+                    entry["result"] = self.dispatch(request)
+                except Exception as exc:
+                    entry["error"] = str(exc)
+                    try:
+                        self.execute('ALDGUIStatus("Operation failed")')
+                        if isinstance(exc, UnsupportedContentError):
+                            entry["unsupported_counts"] = exc.counts
+                            entry["unsupported_report"] = str(exc.report)
+                            # No field_text truncation: show every unsupported category
+                            # in the scrollable result form, even beyond 6000 bytes.
+                            remote_report = scratch(self.client, exc.report.name)
+                            checked(self.client.upload_file(str(exc.report), remote_report))
+                            message = 'Operation failed: ' + str(exc)
+                            summary_remote = None
+                            # IC23.1 MLTextField accepts at most 8191 bytes. An
+                            # oversized summary opens in the native file viewer in
+                            # full; no categories are dropped from either report.
+                            if len(message.encode("utf-8")) > 7600:
+                                summary = exc.report.with_suffix(".summary.txt")
+                                summary.write_text(message, encoding="utf-8")
+                                summary_remote = scratch(self.client, summary.name)
+                                checked(self.client.upload_file(str(summary), summary_remote))
+                                message = (f"Cannot commit unsupported layout content: {len(exc.counts)} categories.\n"
+                                           "The complete category summary has opened in a text viewer.\n"
+                                           "Use View all unsupported elements for individual records.")
+                            self.execute(f"ALDGUIUnsupported({sk(message)} {sk(remote_report)} {sk(summary_remote)})")
+                        else:
+                            self.notice("Operation failed: " + str(exc))
+                    except Exception as notification:
+                        entry["notification_error"] = str(notification)[:2000]
+                atomic_json(self.root / "requests" / (uuid.uuid4().hex + ".json"), entry)
         return len(requests)
 
     def serve(self):

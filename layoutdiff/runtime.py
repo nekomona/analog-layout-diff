@@ -19,6 +19,7 @@ import traceback
 import uuid
 
 from .history import atomic_json, read_json
+from .workspace import new_session, reap
 
 
 def process_identity(pid, proc=Path("/proc")):
@@ -78,8 +79,7 @@ def supervise(root, parent_pid, port, review_library, *, worker_command=None, gr
             # Do not adopt/kill a possibly unrelated old process.
             raise RuntimeError("Existing worker.lock: stop the previous worker first")
         token = uuid.uuid4().hex
-        session = root / "sessions" / token
-        session.mkdir(parents=True, mode=0o700)
+        session = new_session()
         (session / "tmp").mkdir()
         stop = root / "STOP"
         stop.unlink(missing_ok=True)
@@ -101,7 +101,7 @@ def supervise(root, parent_pid, port, review_library, *, worker_command=None, gr
             os.replace(logfile, root / "runtime.previous.log")
         child = None
         state = {"supervisor_pid": os.getpid(), "parent_pid": parent_pid,
-                 "parent_identity": parent_id, "session": token, "root": str(root),
+                 "parent_identity": parent_id, "session": token, "temporary_directory": str(session), "root": str(root),
                  "started": time.time(), "status": "starting"}
         try:
             with logfile.open("a", buffering=1) as log:
@@ -139,16 +139,23 @@ def supervise(root, parent_pid, port, review_library, *, worker_command=None, gr
                 remove_owned_locks(root, child.pid)
                 from .gitcommit import cleanup_locks
                 cleanup_locks(session / "git-locks.json", child.pid)
-            # Only our randomly named child of sessions is disposable.
-            assert session.parent == root / "sessions" and session.name == token
-            shutil.rmtree(session)
+            pending = reap(session, parent_dead=process_identity(parent_pid) != parent_id)
+            if pending:
+                # Detached, bridge-free janitor. Native SKILL owns window leases;
+                # it keeps writing release markers after the main worker stops.
+                subprocess.Popen([sys.executable, '-m', 'layoutdiff.runtime', 'reap',
+                    '--root', str(root), '--session', str(session), '--parent', str(parent_pid),
+                    '--parent-identity', parent_id], stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            else:
+                shutil.rmtree(session)
             stop.unlink(missing_ok=True)
             state.update(status="stopped", reason=reason, stopped=time.time(),
                          worker_exit=None if not child else child.returncode)
             atomic_json(root / "runtime.json", state)
             if child and child.returncode and logfile.exists():
                 print(logfile.read_text(errors="replace")[-8000:], flush=True)
-            print("Stopped: " + reason + "; worker, scratch and owned locks released", flush=True)
+            print("Stopped: " + reason + "; worker and locks released; open window bundles retained until close", flush=True)
 
 
 def run_worker(root, session, port, parent_pid, review_library):
@@ -166,6 +173,7 @@ def run_worker(root, session, port, parent_pid, review_library):
     if actual_pid != parent_pid:
         raise RuntimeError("Bridge endpoint belongs to a different Virtuoso process")
     worker = GuiWorker(client, root, review_library=review_library)
+    worker.temp_session = session
     worker.adapter.artifacts = session / "artifacts"
     worker.adapter.artifacts.mkdir()
     worker.adapter.hierarchy.artifacts = worker.adapter.artifacts
@@ -190,6 +198,7 @@ def run_worker(root, session, port, parent_pid, review_library):
         worker.dispatch(["sources"])
         while not stop.exists():
             count = worker.poll()
+            reap(session)
             worker.execute(f"ALDRuntimeHeartbeat({os.getpid()} {count})")
             time.sleep(.8)
     except Exception:
@@ -209,17 +218,26 @@ def run_worker(root, session, port, parent_pid, review_library):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("mode", choices=["supervise", "worker"])
+    p.add_argument("mode", choices=["supervise", "worker", "reap"])
     p.add_argument("--root", required=True)
     p.add_argument("--parent", type=int, required=True)
-    p.add_argument("--port", type=int, required=True)
+    p.add_argument("--port", type=int)
+    p.add_argument("--parent-identity")
     p.add_argument("--review-library", default="LAYOUT_DIFF_TEST")
     p.add_argument("--session")
     args = p.parse_args()
     if args.mode == "supervise":
         supervise(args.root, args.parent, args.port, args.review_library)
-    else:
+    elif args.mode == 'worker':
         run_worker(args.root, args.session, args.port, args.parent, args.review_library)
+    else:
+        session = Path(args.session)
+        while session.exists():
+            pending = reap(session, parent_dead=process_identity(args.parent) != args.parent_identity)
+            if not pending:
+                shutil.rmtree(session)
+                break
+            time.sleep(1)
 
 
 if __name__ == "__main__":

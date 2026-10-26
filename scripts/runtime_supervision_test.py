@@ -89,7 +89,7 @@ while not (root/'STOP').exists(): time.sleep(.05)
         self.assertFalse((self.root / "git/index.lock").exists())
         self.assertFalse((self.root / "git/index.ald-test").exists())
         self.assertEqual((self.root / "foreign-git/index.lock").read_bytes(), bytes([0, 255, 254]))
-        self.assertEqual(list((self.root / "sessions").iterdir()), [])
+        self.assertFalse(Path(state['temporary_directory']).exists())
 
     def test_gui_stop(self):
         p = self.start()

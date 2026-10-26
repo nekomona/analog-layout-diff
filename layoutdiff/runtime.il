@@ -81,6 +81,7 @@ procedure(ALDRuntimeRestart()
 procedure(ALDRuntimeExit()
   ; regExitAfter runs only after Virtuoso has accepted exit; it never vetoes it.
   ALDRuntimeRestartPending=nil
+  when(boundp('ALDGUILeases) errset(ALDGUILeaseExit() t))
   when(ALDRuntimeIPC errset(ipcWriteProcess(ALDRuntimeIPC "STOP\n") nil)) t)
 
 procedure(ALDRuntimeReady(owner pid root)

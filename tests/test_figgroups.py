@@ -122,7 +122,7 @@ def test_gui_coverage_report_is_not_truncated_to_six_kilobytes(tmp_path, categor
     report = tmp_path / 'all.jsonl'
     report.write_text('{}\n')
     failure = UnsupportedContentError(counts, report)
-    client = SimpleNamespace(layoutdiff_scratch=lambda name: '/tmp/' + name,
+    client = SimpleNamespace(layoutdiff_local_files=True, layoutdiff_scratch=lambda name: '/tmp/' + name,
         upload_file=lambda *args: SimpleNamespace(status='success', output='t'))
     worker = GuiWorker(client, tmp_path / 'worker')
     sent = []
@@ -138,7 +138,7 @@ def test_gui_coverage_report_is_not_truncated_to_six_kilobytes(tmp_path, categor
     else:
         summary = report.with_suffix('.summary.txt').read_text()
         assert all(reason in summary for reason in counts)
-        assert '/tmp/all.summary.txt' in shown
+        assert '/transport/all.summary.txt' in shown and 'ald-session-' in shown
     audit = json.loads(next((worker.root / 'requests').glob('*.json')).read_text())
     assert audit['unsupported_counts'] == counts and 'notification_error' not in audit
 

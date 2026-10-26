@@ -101,7 +101,7 @@ procedure(ALDGUIQuickCancel(form)
 procedure(ALDGUIQuickOpenFull(token path)
   when(boundp('ALDGUIQuickForm) && ALDGUIQuickForm && ALDGUIQuickForm->aldToken==token
     ALDGUIQuickForm->aldPath=path
-    ALDGUIQuickForm->aldFullWindow=hiViewTextFile(path ?title "Layout Diff - Full Commit Preview" ?fixedFont t)))
+    ALDGUIQuickForm->aldFullWindow=ALDGUIViewFile(path "Layout Diff - Full Commit Preview")))
 
 procedure(ALDGUIPerformance(mode text)
   let((choice status)
@@ -151,18 +151,20 @@ procedure(ALDGUINotice(text)
         ?dontBlock t ?dialogStyle 'modeless ?buttonLayout 'Close))
     ALDGUIResultForm->aldFullReport->enabled=nil
     ALDGUIResultForm->aldResult->value=text
+    ALDGUILeaseForm(ALDGUIResultForm)
     hiDisplayForm(ALDGUIResultForm)))
 
 procedure(ALDGUIUnsupported(text path summaryPath)
   ALDGUINotice(text)
   ALDGUIResultForm->aldReportPath=path
   ALDGUIResultForm->aldFullReport->enabled=t
-  when(summaryPath ALDGUIResultForm->aldSummaryWindow=hiViewTextFile(summaryPath
-    ?title "Layout Diff - All Unsupported Categories" ?fixedFont t)))
+  when(summaryPath ALDGUIResultForm->aldSummaryWindow=ALDGUIViewFile(summaryPath
+    "Layout Diff - All Unsupported Categories")))
 
 procedure(ALDGUIStatus(text)
   let((bar)
     printf("Layout Diff: %s\n" text)
+    when(boundp('ALDGUIBusyForm) && ALDGUIBusyForm ALDGUIBusyForm->aldBusyText->value=text)
     when(boundp('ALDRuntimeMenu) ALDRuntimeActivity(text))
     foreach(win hiGetWindowList()
       when(ALDGUIWindows[win]
@@ -173,6 +175,8 @@ procedure(ALDGUIEnqueue(request)
   if(car(request)=="logs" && boundp('ALDRuntimeMenu) then ALDRuntimeLogs()
   else if(ALDGUIOwner && (!boundp('ALDRuntimeState) || ALDRuntimeState=="Running") then
     ALDGUIQueue=append(ALDGUIQueue list(request))
+    when(member(car(request) '("review" "quick-preview" "restore-prepare" "restore-apply" "browser" "history" "repository"))
+      ALDGUIBusyStart("Loading... Request queued"))
     ALDGUIStatus("Queued...")
   else
     if(boundp('ALDRuntimeMenu) then ALDRuntimePanel()
@@ -532,6 +536,11 @@ procedure(ALDGUIPoll(owner)
 
 procedure(ALDGUIStop(owner)
   when(ALDGUIOwner==owner
+    ALDGUIBusyDone()
+    when(boundp('ALDGUIRestoreForm) && ALDGUIRestoreForm hiFormCancel(ALDGUIRestoreForm))
+    foreach(lease ALDGUILeases
+      when(ALDGUILeases[lease]
+        ALDGUILeases[lease]['hold]=nil ALDGUILeaseSeal(lease)))
     ALDGUIBlinkGeneration=ALDGUIBlinkGeneration+1 ALDGUIBlinkScheduled=nil
     when(ALDGUIQuickKey
       when(hiGetBindKey("Layout" ALDGUIQuickKey)=="ALDGUIQuickSave(hiGetCurrentWindow())"
@@ -564,5 +573,8 @@ procedure(ALDGUIStop(owner)
 
 procedure(ALDGUIOpenUnsupported()
   when(boundp('ALDGUIResultForm) && ALDGUIResultForm && ALDGUIResultForm->aldReportPath
-    ALDGUIResultForm->aldReportWindow=hiViewTextFile(ALDGUIResultForm->aldReportPath
-      ?title "Layout Diff - Unsupported Elements" ?fixedFont t)))
+    let((previous)
+      previous=ALDGUIActiveLease ALDGUIActiveLease=ALDGUIResultForm->aldLease
+      ALDGUIResultForm->aldReportWindow=ALDGUIViewFile(ALDGUIResultForm->aldReportPath
+        "Layout Diff - Unsupported Elements")
+      ALDGUIActiveLease=previous)))
