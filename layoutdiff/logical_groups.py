@@ -1,4 +1,4 @@
-"""Resolve capture-local group references without persisting database handles.
+"""Resolve capture-local object references without persisting database handles.
 
 Normal objects keep their existing v1 keys. Groups are content-addressed because
 OpenAccess permits duplicate group names. Nested groups resolve bottom-up.
@@ -45,15 +45,17 @@ def resolve_records(records):
     try:
         for seq, r in enumerate(records):
             token = r.pop('_captureId', None)
-            if r['kind'] == 'group' and '_members' in r:
-                if type(token) is not int:
-                    raise ValueError('Group capture is missing its local reference')
-                db.execute('INSERT INTO groups(token,raw) VALUES (?,?)', (token, encoded(r)))
-                db.executemany('INSERT INTO edges VALUES (?,?)', ((token, m[0]) for m in r['_members'] or []))
-                continue
             if r.get('pin'):
                 p = r['pin']
                 ref(p.pop('_captureId', None), pin_key(p['term'], p['name']))
+            if (r['kind'] == 'group' and '_members' in r) or '_refs' in r:
+                if type(token) is not int:
+                    raise ValueError('Linked object capture is missing its local reference')
+                db.execute('INSERT INTO groups(token,raw) VALUES (?,?)', (token, encoded(r)))
+                links = [m[0] for m in r.get('_members') or []]
+                links += [link[0] for _, link in r.get('_refs') or [] if link]
+                db.executemany('INSERT INTO edges VALUES (?,?)', ((token, target) for target in links))
+                continue
             if r['kind'] == 'inst':
                 for connection in r['connections']:
                     if len(connection) == 4:
@@ -73,20 +75,27 @@ def resolve_records(records):
             for token, raw in ready:
                 r = json.loads(raw)
                 members, problems = [], []
-                for target, kind, props in r.pop('_members') or []:
+                def resolve(target, kind):
                     found = db.execute('SELECT key,base FROM refs WHERE token=?', (target,)).fetchone()
                     if not found:
-                        problems.append('uncaptured group member type: ' + str(kind))
-                        continue
+                        problems.append('uncaptured object reference type: ' + str(kind))
+                        return None
                     key, base = found
                     if base and db.execute('SELECT n FROM counts WHERE base=?', (base,)).fetchone()[0] > 1:
-                        problems.append('ambiguous group reference to identical ' + str(kind) + ' objects')
-                    members.append({'target': key, 'props': props or []})
-                if not r['isOrdered']:
-                    members.sort(key=encoded)
-                r['members'] = members
+                        problems.append('ambiguous reference to identical ' + str(kind) + ' objects')
+                    return key
+                for field, link in r.pop('_refs', None) or []:
+                    r[field] = resolve(*link) if link else None
+                if '_members' in r:
+                    for target, kind, props in r.pop('_members') or []:
+                        key = resolve(target, kind)
+                        if key is not None:
+                            members.append({'target': key, 'props': props or []})
+                    if not r['isOrdered']:
+                        members.sort(key=encoded)
+                    r['members'] = members
                 if problems:
-                    r['memberReferenceIssues'] = sorted(set(problems))
+                    r['memberReferenceIssues' if r['kind'] == 'group' else 'referenceIssues'] = sorted(set(problems))
                 resolved.append((token, r))
             # Resolve a whole dependency level before parents; detect duplicate
             # groups independently of native enumeration order.
@@ -96,9 +105,14 @@ def resolve_records(records):
                 db.execute('UPDATE groups SET raw=?,done=1 WHERE token=?', (encoded(r), token))
         for token, raw in db.execute('SELECT token,raw FROM groups WHERE done=0'):
             r = json.loads(raw)
-            r.pop('_members', None)
-            r['members'] = []
-            r['memberReferenceIssues'] = ['cyclic logical-group references are not supported']
+            if r['kind'] == 'group':
+                r.pop('_members', None)
+                r['members'] = []
+                r['memberReferenceIssues'] = ['cyclic logical-group references are not supported']
+            else:
+                for field, _ in r.pop('_refs', []):
+                    r[field] = None
+                r['referenceIssues'] = ['cyclic object references are not supported']
             db.execute('UPDATE groups SET raw=? WHERE token=?', (encoded(r), token))
         for raw, in db.execute('SELECT raw FROM records ORDER BY seq'):
             yield json.loads(raw)

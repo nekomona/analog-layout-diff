@@ -3,7 +3,7 @@ from collections import defaultdict, deque
 from .core import encoded, validate
 
 VISUAL = {"rect", "polygon", "path", "pathSeg", "label", "ellipse", "line", "donut", "arc",
-          "inst", "mosaic", "stdVia", "prBoundary"}
+          "inst", "mosaic", "stdVia", "prBoundary", "snapBoundary", "layerBlockage", "areaBlockage", "textDisplay"}
 ATTRIBUTES = {"props", "net", "pin", "group", "groupOrder", "routeStatus"}
 GROUP_FIELDS = {"group", "groupOrder"}
 GROUP_KINDS = {"figGroup", "group"}
@@ -68,6 +68,8 @@ def classify(before, after):
         if groups[key] == "new" or r["kind"] not in VISUAL:
             continue
         related = ["net:" + str(r.get("net")), "term:" + str((r.get("pin") or {}).get("term"))]
+        if r['kind'] == 'textDisplay' and (r.get('associate') or '').startswith(('net:', 'term:')):
+            related.append(r['associate'])
         related += ["net:" + str(c[1]) for c in r.get("connections", [])]
         if r["kind"] in {"inst", "mosaic"} and (
                 tuple(r.get(x) for x in ("libName", "cellName", "viewName")) in masters):

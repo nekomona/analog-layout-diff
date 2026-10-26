@@ -25,14 +25,17 @@ def category(record):
         return master + " " + suffix
     if kind == "stdVia":
         return str(record.get("viaDef") or "Unknown via definition") + " vias"
-    if kind in VISUAL - {"inst", "mosaic", "stdVia", "prBoundary"}:
+    if kind == 'layerBlockage':
+        return str(record.get('layer') or 'Unknown layer') + ' blockages'
+    if kind in VISUAL - {"inst", "mosaic", "stdVia", "prBoundary", "snapBoundary", "areaBlockage"}:
         layer = str(record.get("layerName") or "Unknown layer")
         purpose = record.get("purpose")
         if purpose and purpose != "drawing":
             layer += "/" + purpose
-        return layer + (" labels" if kind == "label" else " shapes")
+        return layer + (" text displays" if kind == 'textDisplay' else " labels" if kind == "label" else " shapes")
     return {"cell": "Cellview properties", "net": "Connectivity / nets", "term": "Connectivity / terminals",
             "figGroup": "Figure groups", "group": "Logical groups", "prBoundary": "Placement boundary",
+            "snapBoundary": "Snap boundary", "sitePattern": "Placement site pattern", "areaBlockage": "Placement blockages",
             "unsupported": "Unsupported content"}.get(kind, kind)
 
 

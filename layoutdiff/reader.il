@@ -31,6 +31,21 @@ procedure(ALDLocalRef(o)
     unless(aldCaptureRefs[o] aldNextRef=aldNextRef+1 aldCaptureRefs[o]=aldNextRef)
     aldCaptureRefs[o]))
 
+procedure(ALDObjectRefs(o names)
+  list(list("_refs" foreach(mapcar name names
+    list(name when(dbGet(o name)
+      list(ALDLocalRef(dbGet(o name)) dbGet(o name)~>objType)))))))
+
+procedure(ALDTextRefs(o)
+  let((target path refs paths)
+    foreach(name '("owner" "associate" "parent")
+      target=dbGet(o name) path=nil
+      while(target && target~>objType=="prop"
+        path=cons(target~>name path) target=target~>object)
+      refs=cons(list(name when(target list(ALDLocalRef(target) target~>objType))) refs)
+      when(path paths=cons(list(strcat(name "Property") path) paths)))
+    cons(list("_refs" reverse(refs)) paths)))
+
 procedure(ALDEmit(port kind fields @optional obj)
   fprintf(port "%L\n" cons(list("kind" kind)
     append(fields when(obj && aldCaptureRefs list(list("_captureId" ALDLocalRef(obj))))))))
@@ -76,7 +91,8 @@ procedure(ALDRead(lib cell view path)
       ignored=makeTable('aldIgnored nil)
       foreach(attr '("routes" "markers" "steiners")
         foreach(o dbGet(cv attr) ignored[o]=t))
-      aldCaptureRefs=when(cv~>groups makeTable('aldCaptureRefs nil)) aldNextRef=0
+      aldCaptureRefs=when(cv~>groups || cv~>blockages || cv~>snapBoundary ||
+        exists(s cv~>shapes s~>objType=="textDisplay") makeTable('aldCaptureRefs nil)) aldNextRef=0
       ; Build once, O(members), rather than searching each group's list per figure.
       ; dbIds are only temporary lookup keys and never leave this process.
       groupOrders=makeTable('aldGroupOrders nil)
@@ -89,6 +105,10 @@ procedure(ALDRead(lib cell view path)
         list("technology" techGetTechLibName(ddGetObj(lib)))
         list("units" cv~>userUnits) list("cellType" cv~>cellType)
         list("props" ALDProps(cv))) cv)
+      when(cv~>sitePattern
+        ALDEmit(port "sitePattern" list(list("entries" foreach(mapcar entry cv~>sitePattern
+          if(length(entry)==3 then list(car(entry) ALDScale(cadr(entry) dbu) caddr(entry))
+            else list("@unsupported-site-pattern-entry" ALDOpaque(entry))))))))
       foreach(o setof(fig cv~>shapes !ignored[fig])
         kind=o~>objType
         fields=case(kind
@@ -99,6 +119,7 @@ procedure(ALDRead(lib cell view path)
           ("path" '("points" "width" "pathStyle" "beginExt" "endExt"))
           ("pathSeg" '("beginPt" "endPt" "width" "beginStyle" "endStyle" "beginExt" "endExt" "topology"))
           ("label" '("xy" "theLabel" "justify" "orient" "font" "height" "isDrafted" "isOverbar" "isVisible" "labelType"))
+          ("textDisplay" '("xy" "text" "justify" "orient" "font" "height" "isDrafted" "isOverbar" "isVisible" "assocType" "isNameVisible" "isValueVisible"))
           (t '("bBox")))
         dims='("bBox" "points" "xy" "width" "height" "beginPt" "endPt" "beginExt" "endExt" "ellipseBBox" "innerRadius" "outerRadius")
         ; IC23.1 dbGetPathSegStyle returns (width beginStyle endStyle
@@ -108,8 +129,9 @@ procedure(ALDRead(lib cell view path)
         ; lengths and must not be rescaled by sqrt(2) on replay.
         custom=when(kind=="pathSeg" && member("custom" list(o~>beginStyle o~>endStyle))
           list(list("customExtensions" ALDScale(caddr(nth(3 dbGetPathSegStyle(o))) dbu))))
+        when(kind=="textDisplay" custom=ALDTextRefs(o))
         ALDEmit(port kind append(append(append(ALDFigure(o dbu groupOrders) ALDFields(o fields dims dbu)) custom)
-          unless(member(kind '("rect" "ellipse" "polygon" "line" "path" "pathSeg" "label" "donut" "arc"))
+          unless(member(kind '("rect" "ellipse" "polygon" "line" "path" "pathSeg" "label" "textDisplay" "donut" "arc"))
             list(list("diagnosticAttributes" ALDOpaqueObject(o))))) o))
       foreach(o cv~>nets
         ALDEmit(port "net" append(list(list("props" ALDProps(o)))
@@ -152,10 +174,28 @@ procedure(ALDRead(lib cell view path)
         o=cv~>prBoundary
         ALDEmit(port "prBoundary" append(list(list("props" ALDProps(o)))
           ALDFields(o '("points") '("points") dbu)) o))
+      when(cv~>snapBoundary
+        o=cv~>snapBoundary
+        ALDEmit(port "snapBoundary" append(append(append(list(list("props" ALDProps(o)))
+          ALDGroupFields(o groupOrders)) ALDObjectRefs(o '("parent")))
+          ALDFields(o '("points" "edgeNames") '("points") dbu)) o))
+      foreach(o cv~>blockages
+        kind=o~>objType
+        if(member(kind '("layerBlockage" "areaBlockage")) then
+          fields=append('( "points" "type" "density" "isPushedDown")
+            if(kind=="layerBlockage" then '("layer" "effectiveWidth" "spacing" "allowPGNet") else '("isSoft")))
+          ALDEmit(port kind append(append(append(append(list(list("props" ALDProps(o)))
+            ALDGroupFields(o groupOrders)) ALDObjectRefs(o '("owner" "parent")))
+            when(kind=="layerBlockage" list(list("maskColor" dbGetBlockageColor(o)))))
+            ALDFields(o fields '("points" "effectiveWidth" "spacing") dbu)) o)
+        else ALDEmit(port "unsupported" list(list("category" "blockages")
+          list("diagnosticAttributes" ALDOpaqueObject(o))) o)))
       ; Other nonempty unimplemented collections remain blockers.
-      foreach(attr '("blockages" "areaBoundaries" "snapBoundary"
-          "guides" "rows" "trackPatterns" "gCellPatterns" "sitePattern" "clusters"
-          "textDisplays" "assocTextDisplays" "widthSpacingSnapPatternDefs")
+      ; textDisplays/assocTextDisplays are relationship indexes; the local
+      ; display objects themselves have already been emitted through shapes.
+      foreach(attr '("areaBoundaries"
+          "guides" "rows" "trackPatterns" "gCellPatterns" "clusters"
+          "widthSpacingSnapPatternDefs")
         vals=dbGet(cv attr)
         when(vals
           foreach(o if(listp(vals) then vals else list(vals))

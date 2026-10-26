@@ -236,7 +236,12 @@ procedure(ALDGUIPrepareShadows(oldToken token keys)
       parts=nil
       case(o~>objType
         (("rect" "inst" "mosaic" "stdVia" "prBoundary") parts=list(list("rect" o~>bBox)))
-        ("polygon" parts=list(list("polygon" o~>points)))
+        (("polygon" "layerBlockage" "areaBlockage" "snapBoundary") parts=list(list("polygon" o~>points)))
+        ; Dynamic text may have a zero-height bbox. Use its anchor cross when
+        ; no visible extent exists; never run layer booleans on annotations.
+        ("textDisplay" parts=if(o~>height>0 then list(list("rect" o~>bBox))
+          else list(list("line" list(list(xCoord(o~>xy)-0.05 yCoord(o~>xy)) list(xCoord(o~>xy)+0.05 yCoord(o~>xy))))
+                    list("line" list(list(xCoord(o~>xy) yCoord(o~>xy)-0.05) list(xCoord(o~>xy) yCoord(o~>xy)+0.05))))))
         ("ellipse" parts=list(list("ellipse" o~>bBox)))
         ("arc" parts=list(list("arc" o~>ellipseBBox o~>bBox)))
         ("donut" parts=list(list("donut" o~>xy o~>outerRadius o~>innerRadius)))
@@ -461,9 +466,14 @@ procedure(ALDGUIOpenReview(token lib cell source assignments packets icons summa
           o=ALDGUIObjects[token][car(entry)]
           when(o
             state['populated][group]=t
-            if(member(o~>objType '("mosaic" "stdVia" "prBoundary")) then
-              geAddHilightRectangle(hl o~>bBox)
-            else geAddHilightFig(hl o nil)))))
+            cond((member(o~>objType '("mosaic" "stdVia" "prBoundary" "PRBoundary"))
+                   geAddHilightRectangle(hl o~>bBox))
+                 (member(o~>objType '("layerBlockage" "areaBlockage" "snapBoundary"))
+                   geAddHilightPolygon(hl o~>points))
+                 (o~>objType=="textDisplay" && o~>height<=0
+                   geAddHilightLine(hl list(list(xCoord(o~>xy)-0.05 yCoord(o~>xy)) list(xCoord(o~>xy)+0.05 yCoord(o~>xy))))
+                   geAddHilightLine(hl list(list(xCoord(o~>xy) yCoord(o~>xy)-0.05) list(xCoord(o~>xy) yCoord(o~>xy)+0.05))))
+                 (t geAddHilightFig(hl o nil))))))
       foreach(entry outlines
         when(car(entry)==group geAddHilightRectangle(hl cadr(entry)) state['populated][group]=t))
       when(group=="deleted"

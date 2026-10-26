@@ -1,6 +1,9 @@
 ; Persistent Virtuoso entry points. The IPC child supervises the Python worker.
 ; Never wait synchronously for a worker: it may itself be waiting for CIW SKILL.
 unless(boundp('ALDRuntimeIPC) ALDRuntimeIPC=nil)
+; A per-CIW startup may pin its verified daemon port. RBPort can be overwritten
+; by loading another bridge setup even while the original daemon is still live.
+unless(boundp('ALDRuntimeBridgePort) ALDRuntimeBridgePort=nil)
 unless(boundp('ALDRuntimeState) ALDRuntimeState="Stopped")
 unless(boundp('ALDRuntimeLog) ALDRuntimeLog="")
 unless(boundp('ALDRuntimeRestartPending) ALDRuntimeRestartPending=nil)
@@ -57,7 +60,8 @@ procedure(ALDRuntimeStart()
   else
     ALDRuntimeState="Starting" ALDRuntimeLog="" ALDRuntimeWorkerPid=0
     ALDRuntimeIPC=ipcBeginProcess(
-      sprintf(nil "%s --parent %d --port %d" ALDRuntimeCommand ipcGetPid() RBPort)
+      sprintf(nil "%s --parent %d --port %d" ALDRuntimeCommand ipcGetPid()
+        if(ALDRuntimeBridgePort then ALDRuntimeBridgePort else RBPort))
       "" 'ALDRuntimeData 'ALDRuntimeData 'ALDRuntimeExited)
     unless(ALDRuntimeIPC ALDRuntimeState="Failed to launch")
     ALDRuntimeUpdate()) t)

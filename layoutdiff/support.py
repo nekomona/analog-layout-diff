@@ -4,12 +4,15 @@ import json
 import sqlite3
 
 SUPPORTED = {"cell", "rect", "polygon", "path", "pathSeg", "label", "ellipse", "line", "donut", "arc",
-             "net", "term", "inst", "mosaic", "stdVia", "figGroup", "group", "prBoundary", "dependency"}
+             "net", "term", "inst", "mosaic", "stdVia", "figGroup", "group", "prBoundary", "dependency",
+             "layerBlockage", "areaBlockage", "snapBoundary", "sitePattern", "textDisplay"}
 
 
 def record_issues(r):
     issues = []
     kind = r["kind"]
+    from .oa_content import issues as oa_issues
+    issues.extend(oa_issues(r))
     if kind not in SUPPORTED:
         issues.append("unsupported collection: " + str(r.get('category', kind)) if kind == "unsupported"
                       else "unsupported object type: " + kind)
@@ -129,11 +132,41 @@ def coverage(snapshot):
                 targets.add(pin_key(r['pin']['term'], r['pin']['name']))
             if r['kind'] == 'inst':
                 targets.update(inst_term_key(r['name'], con[0]) for con in r.get('connections') or [])
+        property_roots = dict(snapshot['objects'])
+        for r in snapshot['objects'].values():
+            if r.get('pin'):
+                property_roots[pin_key(r['pin']['term'], r['pin']['name'])] = r['pin']
+            if r['kind'] == 'inst':
+                for name, _, props in r.get('connections') or []:
+                    property_roots[inst_term_key(r['name'], name)] = {'props': props}
         for key, r in snapshot['objects'].items():
+            from .oa_content import references
+            for target in references(r):
+                if target not in targets:
+                    issues.append('missing object reference: ' + key + ' -> ' + target)
+            for field in ('associate', 'owner', 'parent'):
+                path = r.get(field + 'Property')
+                if isinstance(path, list) and path:
+                    props = property_roots.get(r.get(field), {}).get('props') or []
+                    for name in path:
+                        found = next((p for p in props if p[0] == name), None)
+                        if found is None:
+                            issues.append('missing textDisplay property reference: ' + key)
+                            break
+                        props = found[2] if found[1] == 'hierProp' else []
             if r['kind'] == 'group':
                 for member in r.get('members') or []:
                     if member.get('target') not in targets:
                         issues.append('missing logical group member: ' + key)
+        from .oa_content import replay_items
+        from graphlib import CycleError
+        try:
+            replay_items(snapshot)
+        except CycleError:
+            issues.append('cyclic object references are not supported')
+        for kind in ('sitePattern', 'snapBoundary'):
+            if sum(r['kind'] == kind for r in snapshot['objects'].values()) > 1:
+                issues.append('multiple ' + kind + ' records in one cellview')
         return sorted(set(issues))
     finally:
         groups.close()

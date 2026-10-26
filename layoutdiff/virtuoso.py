@@ -291,8 +291,9 @@ def replay_source(commands, function, chunk_size=200):
 
 def render(snapshot, *, review_token=None):
     from .logical_groups import pin_key, inst_term_key
+    from .oa_content import LINK_FIELDS, replay_items
     records = list(snapshot["objects"].values())
-    has_logical_groups = any(record['kind'] == 'group' for record in records)
+    has_logical_groups = any(record['kind'] == 'group' or record['kind'] in LINK_FIELDS for record in records)
     meta = next(r for r in records if r["kind"] == "cell")
     dbu = meta["dbu"]
 
@@ -323,10 +324,15 @@ def render(snapshot, *, review_token=None):
     commands += prop_cmds("cv", meta["props"])
     if review_token:
         commands.append(f"ALDGUIBeginReview({sk(review_token)} cv)")
-    order = {"net": 0, "term": 1, "figGroup": 2, "group": 2, "inst": 3, "mosaic": 3}
-    for key, r in sorted(((k, r) for k, r in snapshot["objects"].items() if r["kind"] not in {"cell", "dependency"}), key=lambda item: (order.get(item[1]["kind"], 4), 0 if (item[1].get("pin") or {}).get("primary") else 1)):
+    for key, r in replay_items(snapshot):
         kind = r["kind"]
         lpp = sk([r.get("layerName"), r.get("purpose")])
+        def reference(field):
+            return f'figures[{sk(r[field])}]' if r.get(field) else 'nil'
+        if kind == 'sitePattern':
+            entries = [[name, dim(xy), orient] for name, xy, orient in r['entries']]
+            commands.append(f'cv~>sitePattern={sk(entries)}')
+            continue
         if kind == "net":
             expr = f"dbCreateNet(cv {sk(r['name'])})"
         elif kind == "term":
@@ -344,6 +350,24 @@ def render(snapshot, *, review_token=None):
             expr = f"dbCreateParamSimpleMosaicByMasterName(cv {sk(r['libName'])} {sk(r['cellName'])} {sk(r['viewName'])} {sk(r['name'])} {sk(dim(r['xy']))} {sk(r['tileArray'][0])} {sk(r['rows'])} {sk(r['columns'])} {sk(dim(r['uY']))} {sk(dim(r['uX']))} {sk(r['params'])})"
         elif kind == "prBoundary":
             expr = f"dbCreatePRBoundary(cv {sk(dim(r['points']))})"
+        elif kind == 'snapBoundary':
+            expr = f"dbCreateSnapBoundary(cv {sk(dim(r['points']))} {sk(r['edgeNames'])})"
+        elif kind == 'areaBlockage':
+            owner = ' ' + reference('owner') if r.get('owner') else ''
+            expr = f"dbCreateAreaBlockage(cv {sk(dim(r['points']))}{owner})"
+        elif kind == 'layerBlockage':
+            owner = ' ' + reference('owner') if r.get('owner') else ''
+            expr = f"dbCreateLayerBlockage(cv {sk(r['layer'])} {sk(r['type'])} {sk(dim(r['points']))}{owner})"
+        elif kind == 'textDisplay':
+            associate = reference('associate')
+            for name in r.get('associateProperty', []):
+                associate = f'dbGetPropByName({associate} {sk(name)})'
+            args = [dim(r['xy']), r['justify'], r['orient'], r['font'], dim(r['height']),
+                    r['isDrafted'], r['isOverbar'], r['isVisible'], r['isNameVisible'],
+                    r['isValueVisible']]
+            if not r.get('associateProperty'):
+                args += [r['text'], r['assocType'] == 'paramAssocType']
+            expr = f"dbCreateTextDisplay({associate} {reference('owner')} {lpp} t " + ' '.join(sk(x) for x in args) + ')'
         elif kind == "stdVia":
             expr = f"dbCreateVia(cv techFindViaDefByName(techGetTechFile(cv) {sk(r['viaDef'])}) {sk(dim(r['origin']))} {sk(r['orient'])} {sk(r['params'])})"
         elif kind in {"rect", "ellipse"}:
@@ -381,6 +405,19 @@ def render(snapshot, *, review_token=None):
         if review_token:
             commands.append(f"ALDGUIRemember({sk(review_token)} {sk(key)} o)")
         commands += prop_cmds("o", r.get("props", []))
+        if kind in LINK_FIELDS and r.get('parent'):
+            commands.append(f"o~>parent={reference('parent')}")
+        if kind in {'areaBlockage', 'layerBlockage'}:
+            for field in ('density', 'isPushedDown', 'isSoft', 'allowPGNet'):
+                # OA exposes zero for ordinary routing blockages but rejects
+                # setting density on that type. Only nondefault values need a write.
+                if field in r and (field != 'density' or r[field] not in {None, 0}):
+                    commands.append(f'o~>{field}={sk(r[field])}')
+            for field in ('effectiveWidth', 'spacing'):
+                if r.get(field) is not None:
+                    commands.append(f'o~>{field}={sk(dim(r[field]))}')
+            if r.get('maskColor') not in {None, 'grayColor'}:
+                commands.append(f'unless(dbSetBlockageColor(o {sk(r["maskColor"])}) error("Blockage color assignment failed"))')
         if kind == "net":
             commands.append(f"nets[{sk(r['name'])}]=o o~>sigType={sk(r['sigType'])}")
             for field in ("isGlobal", "connStatus", "criticality", "routePattern", "source"):
