@@ -107,7 +107,8 @@ class VirtuosoAdapter:
                                     self.hierarchy.read(root=(lib, cell, view)))
         return snapshot
 
-    def capture_store(self, lib, cell, view="layout", *, dependencies=True, temporary=False):
+    def capture_store(self, lib, cell, view="layout", *, dependencies=True, temporary=False,
+                      allow_unsupported=False):
         """Stream native transport through bounded sorting into a v2 snapshot."""
         from .storage import write_records
         import tempfile
@@ -123,14 +124,31 @@ class VirtuosoAdapter:
         checked(self.client.download_file(remote, str(local)))
         def records():
             with local.open(encoding="utf-8") as stream:
-                yield from checked_records(
-                    capture_records(dict(loads(line)) for line in stream if line.strip()),
-                    self.artifacts / (token + ".unsupported.jsonl"))
+                captured = capture_records(dict(loads(line)) for line in stream if line.strip())
+                yield from (captured if allow_unsupported else checked_records(
+                    captured, self.artifacts / (token + ".unsupported.jsonl")))
             if dependencies:
                 yield from self.hierarchy.read(root=(lib, cell, view))
         try:
             store = write_records(records(), folder / (token + ".layout"))
-        except BaseException:
+            if allow_unsupported:
+                from .omissions import project
+                import shutil
+                full = store
+                try:
+                    store = project(full, folder / (token + ".supported.layout"),
+                                    folder / (token + ".omissions.jsonl"))
+                finally:
+                    full.close()
+                    shutil.rmtree(full.path)
+        except BaseException as exc:
+            from .support import UnsupportedContentError
+            if owner and isinstance(exc, UnsupportedContentError) and exc.report.is_relative_to(folder):
+                import shutil
+                retained = self.artifacts / (token + '.unsupported.jsonl')
+                shutil.copyfile(exc.report, retained)
+                owner.cleanup()
+                raise UnsupportedContentError(exc.counts, retained) from exc
             if owner:
                 owner.cleanup()
             raise

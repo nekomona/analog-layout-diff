@@ -142,6 +142,10 @@ class HistoryBrowser:
                    f"Layout changes: +{stat['added']} added   ~{stat['modified']} modified   -{stat['deleted']} deleted"
                    f"   {stat['modified_net']} modified net"
                    f"    |    {len(files)} affected files")
+        from .omissions import warning
+        omission_warning = warning(self.store.omissions(commit_id)) if self.store else ''
+        if omission_warning:
+            summary = omission_warning + '\n\n' + summary
         return {"id": commit_id, "counts": stat, "kinds": kinds, "summary": summary,
                 "patch": patch, "categories": categories.rows, "files": files, "git": meta,
                 "reviewable": reviewable}

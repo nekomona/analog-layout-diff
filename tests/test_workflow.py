@@ -100,7 +100,7 @@ def test_native_workflow_definitions_are_complete_top_level_forms():
     # Cadence load() can return success after an incomplete trailing procedure;
     # a delimiter check catches that before runtime callbacks go undefined.
     source = Path(__file__).resolve().parents[1]/'layoutdiff'
-    for name in ('workflow.il', 'browser.il'):
+    for name in ('workflow.il', 'browser.il', 'gui.il'):
         depth = 0; quoted = False; escaped = False
         for line in (source/name).read_text().splitlines():
             if line.startswith('procedure('):

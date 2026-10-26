@@ -41,7 +41,7 @@ def snapshot_directory(identity):
 
 def path_identity(path):
     parts = path.split("/")
-    if len(parts) == 5 and parts[-1] in FILES and parts[-2].endswith(".layout"):
+    if len(parts) == 5 and parts[-1] in (*FILES, 'omissions.json', 'omissions.jsonl') and parts[-2].endswith(".layout"):
         return path_identity("/".join(parts[:-1]) + ".json")
     if len(parts) != 4 or parts[0] != "layouts" or not parts[-1].endswith(".layout.json"):
         return None
@@ -157,6 +157,18 @@ class GitSnapshots:
             self._metadata[revision] = {"sha": sha, "parents": parents.split(), "author": author,
                                         "date": date, "message": message.rstrip("\n")}
         return self._metadata[revision]
+
+    def omissions(self, revision):
+        from .omissions import AUDIT
+        raw = blob(self.repo, revision, self.v2 + '/' + AUDIT)
+        if raw is None:
+            return None
+        audit = strict_json(raw)
+        if (audit.get('schema') != 'analog-layout-diff/omissions/1' or
+                audit.get('snapshotSha256') != self.open(revision).digest or
+                any(type(audit.get(k)) is not int or audit[k] < 0 for k in ('omitted', 'detached'))):
+            raise ValueError('Invalid or mismatched layout omission audit')
+        return audit
 
     def pair(self, revision):
         parents = self.metadata(revision)["parents"]

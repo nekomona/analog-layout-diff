@@ -186,6 +186,22 @@ def prepare_v2(repo, identity, snapshot, *, backend="auto"):
         changes = ChangeIndex(before, snapshot, backend=backend)
         adopting = blob(repo, base["head"], prefix + "/manifest.json") is None and before.count > 0
         files = {prefix + "/" + name: snapshot.path / name for name in FILES}
+        from .omissions import AUDIT, DETAILS, warning
+        omissions = getattr(snapshot, 'omissions', None)
+        audit_changed = False
+        for name, data in ((AUDIT, json_bytes(omissions) if omissions else None),
+                           (DETAILS, snapshot.omission_report if omissions else None)):
+            previous = (blob(repo, base['head'], prefix + '/' + name) if name == AUDIT else
+                (git(repo, 'ls-tree', '-z', base['head'], '--', prefix + '/' + name).stdout or None)
+                if base['head'] else None)
+            if data is not None:
+                files[prefix + '/' + name] = data
+                # The summary includes the report hash; avoid loading large reports.
+                if name == AUDIT:
+                    audit_changed = previous != data
+            elif previous is not None:
+                files[prefix + '/' + name] = None
+                audit_changed = True
         if blob(repo, base["head"], store.path) is not None:
             files[store.path] = None  # Migrate in this same ordinary Git commit.
         attr_path = "layouts/.gitattributes"
@@ -204,7 +220,8 @@ def prepare_v2(repo, identity, snapshot, *, backend="auto"):
         return Prepared(repo=str(repo), identity=list(identity), base=base, before=before, snapshot=snapshot,
             prefix=prefix, summary=summary, changes=changes, store=store, operations=changes.raw_operations,
             display_patch=changes.overview(interactive=False), adopting=adopting,
-            write_required=bool(changes.raw_operations) or adopting, files=files)
+            write_required=bool(changes.raw_operations) or adopting or audit_changed, files=files,
+            omissions=omissions, omission_warning=warning(omissions))
     except BaseException:
         if changes:
             changes.close()
@@ -257,6 +274,10 @@ def commit(preview, message, *, scratch=None, registry=None):
                 raise ValueError("Prepared snapshot changed after preview")
         finally:
             current.close()
+        if preview.get('omissions'):
+            from .streaming import file_digest
+            if file_digest(preview['snapshot'].omission_report) != preview['omissions']['reportSha256']:
+                raise ValueError('Prepared omission report changed after preview')
     for name in files:
         ensure_clean(repo, name)
     index = Path(git(repo, "rev-parse", "--git-path", "index").stdout.decode().strip())

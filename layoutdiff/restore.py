@@ -33,6 +33,8 @@ def prepare(worker, identity, revision):
     model = worker.history_model(identity) if owned else state['model']
     try:
         _, after = model.pair(revision)
+        from .omissions import warning
+        omission_warning = warning(model.store.omissions(revision)) if model.store else ''
     finally:
         if owned:
             model.close()
@@ -55,6 +57,7 @@ def prepare(worker, identity, revision):
     # Retain the verified checkpoint until the asynchronous OK/Cancel callback.
     worker.execute(f'ALDGUILeases[{sk(token)}][\'hold]=t')
     text = (f"Restore {' / '.join(identity)}\nCheckpoint: {revision}\n\n"
+            + (omission_warning + '\n\n' if omission_warning else '') +
             f"The checkpoint has been reconstructed and verified ({len(after['objects'])} records).\n"
             f"Hierarchy warnings: {len(adapter.last_dependency_warnings)}\n\n"
             "OK replaces and saves the current layout. Its layout windows will close and reopen. "

@@ -21,6 +21,8 @@ ALDGUIHighlightGroups=foreach(mapcar choice ALDGUIStyleChoices cadr(choice))
 ; Recreate the preview after a plugin reload so upgraded field layouts take effect.
 when(boundp('ALDGUIQuickForm) && ALDGUIQuickForm
   hiFormCancel(ALDGUIQuickForm) hiDeleteForm(ALDGUIQuickForm))
+when(boundp('ALDGUIOmissionForm) && ALDGUIOmissionForm
+  hiFormCancel(ALDGUIOmissionForm) hiDeleteForm(ALDGUIOmissionForm) ALDGUIOmissionForm=nil)
 when(boundp('ALDGUIResultForm) && ALDGUIResultForm
   hiFormCancel(ALDGUIResultForm) hiDeleteForm(ALDGUIResultForm) ALDGUIResultForm=nil)
 when(boundp('ALDGUIStyleForm) && ALDGUIStyleForm
@@ -103,6 +105,36 @@ procedure(ALDGUIQuickOpenFull(token path)
     ALDGUIQuickForm->aldPath=path
     ALDGUIQuickForm->aldFullWindow=ALDGUIViewFile(path "Layout Diff - Full Commit Preview")))
 
+procedure(ALDGUIOmissionConfirm(token text final)
+  when(boundp('ALDGUIOmissionForm) && ALDGUIOmissionForm
+    ALDGUIOmissionForm->aldToken=nil
+    hiFormCancel(ALDGUIOmissionForm) hiDeleteForm(ALDGUIOmissionForm))
+  ALDGUIOmissionForm=hiCreateLayoutForm('ALDGUIOmissionForm
+    if(final then "Layout Diff - Confirm rollback data loss (2/2)"
+      else "Layout Diff - Unsupported elements (1/2)")
+    hiCreateVerticalBoxLayout('aldOmissionLayout ?margins '(12 12 12 12) ?items list(
+      hiCreateMLTextField(?name 'aldOmissionText ?prompt "" ?editable nil ?enableWordWrap t)
+      hiCreateButton(?name 'aldOmissionReport ?buttonText "View all omissions..."
+        ?callback "ALDGUIEnqueue(list(\"quick-omission-report\" ALDGUIOmissionForm->aldToken))")
+      hiCreateLabel(?name 'aldOmissionHint ?labelText "Close, Escape or Enter rejects this commit. The saved layout is kept.")))
+    ?initialSize '(830 490) ?dialogStyle 'modeless
+    ?buttonLayout list('Close list(concat(if(final then "Confirm loss and commit" else "Continue ignoring elements"))
+      'ALDGUIOmissionAccept))
+    ?callback list('ALDGUIOmissionReject 'ALDGUIOmissionReject))
+  ALDGUIOmissionForm->aldToken=token ALDGUIOmissionForm->aldFinal=final
+  ALDGUIOmissionForm->aldOmissionText->value=text
+  hiDisplayForm(ALDGUIOmissionForm))
+
+procedure(ALDGUIOmissionReject(form)
+  when(form->aldToken
+    ALDGUIEnqueue(list("quick-cancel" form->aldToken)) form->aldToken=nil))
+
+procedure(ALDGUIOmissionAccept(form)
+  when(form->aldToken
+    ALDGUIEnqueue(list(if(form->aldFinal then "quick-omit-confirm" else "quick-omit-continue") form->aldToken))
+    form->aldToken=nil)
+  hiFormCancel(form))
+
 procedure(ALDGUIPerformance(mode text)
   let((choice status)
     unless(boundp('ALDGUIPerformanceForm) && ALDGUIPerformanceForm
@@ -183,11 +215,11 @@ procedure(ALDGUIEnqueue(request)
         unless(form->aldOpen
           form->aldOpen=t form->aldMore->enabled=nil hiDisplayForm(form))))
     ALDGUIStatus("Queued...")
-    when(member(car(request) '("review" "quick-preview" "quick-commit" "git-setup" "restore-prepare" "restore-apply"
+    when(member(car(request) '("review" "quick-preview" "quick-commit" "quick-omit-confirm" "git-setup" "restore-prepare" "restore-apply"
       "browser" "history" "repository" "repository-select" "repository-cell" "browser-select"
       "browser-file" "browser-category" "browser-full" "quick-full" "cleanup"))
       unless(ALDGUIBusyActive
-        ALDGUIBusyStart("Request queued..." member(car(request) '("quick-preview" "quick-commit" "git-setup")))))
+        ALDGUIBusyStart("Request queued..." member(car(request) '("quick-preview" "quick-commit" "quick-omit-confirm" "git-setup")))))
   else
     if(boundp('ALDRuntimeMenu) then ALDRuntimePanel()
     else ALDGUINotice("Load the Layout Diff startup.il plugin in CIW.")))))
@@ -557,6 +589,7 @@ procedure(ALDGUIStop(owner)
         hiSetBindKey("Layout" ALDGUIQuickKey ""))
       ALDGUIQuickKey=nil)
     when(boundp('ALDGUIQuickForm) && ALDGUIQuickForm hiFormCancel(ALDGUIQuickForm))
+    when(boundp('ALDGUIOmissionForm) && ALDGUIOmissionForm hiFormCancel(ALDGUIOmissionForm))
     when(boundp('ALDGUIGitForm) && ALDGUIGitForm hiFormCancel(ALDGUIGitForm))
     foreach(token ALDGUIHeld ALDGUIDiscard(token))
     when(boundp('ALDGUICommitForm) && ALDGUICommitForm hiFormCancel(ALDGUICommitForm))

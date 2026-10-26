@@ -44,6 +44,7 @@ TASK_LABELS = {
     'quick-preview': 'Reading the saved layout and preparing the commit preview...',
     'git-setup': 'Configuring Git and preparing the commit preview...',
     'quick-commit': 'Verifying the preview and committing to Git...',
+    'quick-omit-confirm': 'Verifying the preview and committing to Git...',
     'history': 'Loading cell history...', 'browser': 'Loading cell history...',
     'repository': 'Loading Git history...', 'repository-select': 'Loading changed cells...',
     'repository-cell': 'Computing layout changes...', 'browser-select': 'Computing layout changes...',
@@ -51,7 +52,7 @@ TASK_LABELS = {
     'browser-file': 'Loading the file diff...', 'browser-category': 'Loading change details...',
     'cleanup': 'Cleaning temporary reviews...',
 }
-POPUP_TASKS = {'quick-preview', 'quick-commit', 'git-setup'}
+POPUP_TASKS = {'quick-preview', 'quick-commit', 'quick-omit-confirm', 'git-setup'}
 
 
 def style_settings(settings):
@@ -242,34 +243,49 @@ class GuiWorker:
         self.previews.clear()
         if self.execute(f"ALDGUIRequireSaved({sk(identity)})") != "t":
             raise ValueError("Layout has unsaved edits. Run Save & Commit again.")
-        snapshot = self.adapter.capture_store(*identity, temporary=True)
+        self.execute('when(boundp(\'ALDGUIOmissionForm) && ALDGUIOmissionForm '
+                     'ALDGUIOmissionForm->aldToken=nil hiFormCancel(ALDGUIOmissionForm))')
+        snapshot = self.adapter.capture_store(*identity, temporary=True, allow_unsupported=True)
+        try:
+            return self._quick_preview(identity, snapshot)
+        except BaseException:
+            snapshot.dispose()
+            raise
+
+    def _quick_preview(self, identity, snapshot):
         if self.execute(f"ALDGUIRequireSaved({sk(identity)})") != "t":
             raise ValueError("Layout changed during capture. Run Save & Commit again.")
         repo = self.git_repository()
         if repo is None:
             working = Path(loads(self.execute("getWorkingDir()")))
             self.execute(f"ALDGUIShowGitSetup({sk(identity)} {sk(str(working.parent))} \"\" \"\")")
+            snapshot.dispose()
             return {"needs_repository": True, "suggested": str(working.parent)}
         try:
             preview = gitcommit.prepare(repo, identity, snapshot)
         except RuntimeError as exc:
             if "identity" in str(exc).lower() or "email" in str(exc).lower():
                 self.execute(f"ALDGUIShowGitSetup({sk(identity)} {sk(str(repo))} \"\" \"\")")
+                snapshot.dispose()
                 return {"needs_git_identity": True}
             raise
         if not preview["write_required"]:
+            warning = preview['omission_warning']
             preview.close()
-            self.notice("Layout saved. No changes relative to its current Git revision.")
+            self.notice((warning + '\n\n' if warning else '') + "Layout saved. No changes relative to its current Git revision.")
             self.execute('ALDGUIStatus("Saved; no changes")')
             return {"no_changes": True}
         token = uuid.uuid4().hex
+        preview['phase'] = 'preview'
         self.previews[token] = preview
         categories = preview["changes"]
         display_summary = "\n".join(line for line in preview["summary"].splitlines() if not line.startswith("Kinds:"))
         display_summary = re.sub(r"Objects:.*", f"Changes: {categories.totals['added']}A, "
                                 f"{categories.totals['modified']}M, {categories.totals['deleted']}D, "
                                 f"{categories.totals['modified_net']} modified net", display_summary)
-        self.execute(f"ALDGUIShowQuickPreview({sk(token)} {sk(display_summary)} "
+        if preview['omissions']:
+            display_summary = (preview['omission_warning'] + '\nTwo additional confirmations are required.\n\n' + display_summary)
+        self.execute(f"ALDGUIShowQuickPreview({sk(token)} {sk(field_text(display_summary))} "
                      f"{sk(field_text(categories.overview(interactive=False)))} nil)")
         self.execute('ALDGUIStatus("Saved; awaiting commit message")')
         return {"token": token, "repo": str(repo), "operations": preview["operations"], "backend": categories.backend}
@@ -283,20 +299,88 @@ class GuiWorker:
         return {"full_diff": path}
 
     def quick_commit(self, token, message):
-        preview = self.previews.pop(token, None)
-        if preview is None:
-            raise ValueError("Preview expired. Run Save & Commit again.")
-        if self.execute(f"ALDGUIRequireSaved({sk(preview['identity'])})") != "t":
-            raise ValueError("Layout changed after preview. Run Save & Commit again.")
-        current = self.adapter.capture_store(*preview["identity"], temporary=True)
-        equal = current.digest == preview["snapshot"].digest
-        current.dispose()
-        if not equal:
-            raise ValueError("Layout or hierarchy changed after preview. Run Save & Commit again.")
-        if self.execute(f"ALDGUIRequireSaved({sk(preview['identity'])})") != "t":
-            raise ValueError("Layout changed while validating preview. Run Save & Commit again.")
-        result = gitcommit.commit(preview, str(message), scratch=self.git_scratch, registry=self.lock_registry)
-        preview.close()
+        preview = self._take_preview(token, 'preview')
+        try:
+            if not isinstance(message, str) or not message.strip():
+                raise ValueError('Enter a nonempty commit message')
+            preview['message'] = message
+            if preview['omissions']:
+                return self._omission_prompt(preview, 'omit-choice')
+            return self._finish_commit(preview)
+        except BaseException:
+            preview.close()
+            raise
+
+    def _take_preview(self, token, phase):
+        preview = self.previews.get(token)
+        if preview is None or preview.get('phase') != phase:
+            raise ValueError('Preview or confirmation expired. Run Save & Commit again.')
+        del self.previews[token]
+        return preview
+
+    def _omission_prompt(self, preview, phase):
+        # Each step gets a new one-use token. A duplicate callback cannot count
+        # as the next confirmation, nor replace the already-entered message.
+        token = uuid.uuid4().hex
+        preview['phase'] = phase
+        final = phase == 'omit-loss'
+        audit = preview['omissions']
+        text = ('CONFIRMATION 2 OF 2 - ROLLBACK DATA LOSS\n\n' if final else
+                'CONFIRMATION 1 OF 2 - UNSUPPORTED ELEMENTS\n\n')
+        text += preview['omission_warning'] + '\n\n'
+        text += ('Confirm and commit only if you accept that these elements WILL BE LOST '
+                 'when rolling back or restoring this checkpoint. They cannot be reconstructed from it.\n\n'
+                 if final else 'Reject cancels this commit. Continue ignores the listed elements and opens a final data-loss warning.\n\n')
+        text += f"Layout: {' / '.join(preview['identity'])}\nCommit message: {preview['message']}\n\n"
+        text += '\n'.join(f'- {reason}: {count}' for reason, count in audit['counts'].items())
+        if len(text.encode('utf-8')) > 7300:
+            text = text.encode('utf-8')[:7000].decode('utf-8', errors='ignore') + '\n[Use View all omissions for every element and reason.]'
+        self.previews[token] = preview
+        try:
+            self.execute(f'ALDGUIOmissionConfirm({sk(token)} {sk(text)} {sk(final)})')
+        except BaseException:
+            self.previews.pop(token, None)
+            preview.close()
+            raise
+        return dict(token=token, confirmation=2 if final else 1, omitted=audit['omitted'], detached=audit['detached'])
+
+    def quick_omit_continue(self, token):
+        return self._omission_prompt(self._take_preview(token, 'omit-choice'), 'omit-loss')
+
+    def quick_omit_confirm(self, token):
+        return self._finish_commit(self._take_preview(token, 'omit-loss'))
+
+    def quick_omission_report(self, token):
+        preview = self.previews.get(token)
+        if preview is None or not preview['omissions']:
+            raise ValueError('Omission preview expired. Run Save & Commit again.')
+        local = preview['snapshot'].omission_report
+        remote = scratch(self.client, local.name)
+        checked(self.client.upload_file(str(local), remote))
+        self.execute(f'ALDGUIViewFile({sk(remote)} "Layout Diff - All omitted elements and memberships")')
+        return {'report': remote}
+
+    def _finish_commit(self, preview):
+        try:
+            if self.execute(f"ALDGUIRequireSaved({sk(preview['identity'])})") != "t":
+                raise ValueError("Layout changed after preview. Run Save & Commit again.")
+            current = self.adapter.capture_store(*preview["identity"], temporary=True, allow_unsupported=True)
+            try:
+                equal = (current.digest == preview['snapshot'].digest and
+                         current.source_digest == preview['snapshot'].source_digest and
+                         current.omissions == preview['omissions'])
+            finally:
+                current.dispose()
+            if not equal:
+                raise ValueError("Layout, ignored elements or hierarchy changed after preview. Run Save & Commit again.")
+            if self.execute(f"ALDGUIRequireSaved({sk(preview['identity'])})") != "t":
+                raise ValueError("Layout changed while validating preview. Run Save & Commit again.")
+            message = preview['message']
+            if preview['omissions']:
+                message += '\n\nLayout Diff: ' + preview['omission_warning'] + '\nOmissions explicitly confirmed twice.'
+            result = gitcommit.commit(preview, message, scratch=self.git_scratch, registry=self.lock_registry)
+        finally:
+            preview.close()
         self.execute(f"ALDGUIStatus({sk('Git committed ' + result['git_commit'][:12])})")
         self.execute(f"ALDGUIBrowserRefreshIfOpen({sk(preview['identity'])})")
         return result
@@ -558,6 +642,8 @@ class GuiWorker:
         state = self.browser_state
         model = state["model"] if state and state["model"] and state["model"].identity == identity else self.history_model(identity)
         before, after = model.pair(commit_id)
+        from .omissions import warning
+        omission_warning = warning(model.store.omissions(commit_id)) if model.store else ''
         if not after["objects"]:
             self.notice("This revision deletes the layout snapshot. Select an earlier revision to review its layout.")
             return {"deleted": True, "commit": commit_id}
@@ -597,6 +683,8 @@ class GuiWorker:
                 f"Hierarchy warnings: {len(self.adapter.last_dependency_warnings)}\n"
                 "Anonymous geometry moves appear as removal/addition.\n"
                 "Instance, array, and via highlights show their bounds.")
+            if omission_warning:
+                summary = omission_warning + '\n\n' + summary
             assignments = [[key, group] for key, group in sorted(classification["groups"].items())]
             outline_styles = {'new': 'groupNew', 'changed': 'groupChanged', 'deleted': 'groupDeleted'}
             outlines = [[outline_styles[r['status']], r['bBox']] for r in boundaries if r['bBox'] is not None]
@@ -653,6 +741,12 @@ class GuiWorker:
             return self.quick_preview(args)
         if command == "quick-commit" and len(args) == 2:
             return self.quick_commit(*args)
+        if command == 'quick-omit-continue' and len(args) == 1:
+            return self.quick_omit_continue(args[0])
+        if command == 'quick-omit-confirm' and len(args) == 1:
+            return self.quick_omit_confirm(args[0])
+        if command == 'quick-omission-report' and len(args) == 1:
+            return self.quick_omission_report(args[0])
         if command == "quick-cancel" and len(args) == 1:
             old = self.previews.pop(args[0], None)
             if old:
