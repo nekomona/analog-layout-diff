@@ -81,7 +81,9 @@ procedure(ALDFigure(o dbu groupOrders)
 ; in cv~>shapes. Preserve both the editable recipe and exact generated geometry.
 procedure(ALDMPP(r dbu)
   list(list("name" r~>name) list("choppable" rodIsMasterChoppable(r))
-    list("chopHoles" ALDScale(r~>chopHoles dbu))
+    ; IC23.1 exposes an aggregate plus cached tail, already in database units.
+    ; Decode and validate that representation in Python; do not scale twice.
+    list("nativeChopHoles" r~>chopHoles)
     list("unsupportedFeatures" append(when(r~>align list("alignment"))
       append(when(r~>userHandleNames list("user handles"))
         when(exists(part r~>subParts part~>pin) list("subpart pins")))))

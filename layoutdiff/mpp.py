@@ -14,6 +14,33 @@ FIELDS = {'lpp': 'layer', 'separation': 'sep', **{f: f for f in DIMS - {'separat
 STYLES = {'truncateExtend': 'flush', 'extendExtend': 'offset', 'variable': 'variable', 'octagon': 'octagon'}
 
 
+def valid_hole(hole):
+    return (isinstance(hole,list) and len(hole)>=2
+            and all(isinstance(p,list) and len(p)==2
+                    and all(type(v) is int for v in p) for p in hole))
+
+
+def capture_chop_holes(m):
+    """Decode the IC23.1 aggregate/cache representation, in integer DBU.
+
+    Installed docs describe coordinate lists; native one/two-hole and moved
+    fixtures reveal [all_holes, *cached_holes]. Only the aggregate is current.
+    Preserve an unrecognized representation as explicit unsupported content.
+    """
+    if 'nativeChopHoles' not in m:
+        return
+    raw=m.pop('nativeChopHoles')
+    if raw is None:
+        m['chopHoles']=None
+    elif (isinstance(raw,list) and raw and isinstance(raw[0],list)
+          and raw[0] and all(valid_hole(h) for h in raw[0])
+          and all(valid_hole(h) for h in raw[1:])):
+        m['chopHoles']=sorted(raw[0])
+    else:
+        m['chopHoles']=raw
+        m['unsupportedFeatures']=(m.get('unsupportedFeatures') or [])+['native chop-hole encoding']
+
+
 def issues(r):
     m = r.get('mpp')
     if m is None:
@@ -23,9 +50,15 @@ def issues(r):
         result.append('unsupported MPP master path style')
     if not isinstance(m, dict) or not isinstance(m.get('name'), str):
         return result + ['invalid MPP definition']
-    if not m['name'] or type(m.get('choppable')) is not bool or not isinstance(m.get('parts'), list) or not m['parts']:
+    # SKILL nil is captured as JSON null, including an unchoppable master.
+    if (not m['name'] or 'choppable' not in m
+            or (m['choppable'] is not None and type(m['choppable']) is not bool)
+            or not isinstance(m.get('parts'), list) or not m['parts']):
         result.append('invalid MPP definition')
     result += ['unsupported MPP ' + str(f) for f in m.get('unsupportedFeatures') or []]
+    if m.get('chopHoles') is not None and (not isinstance(m['chopHoles'],list)
+            or not all(valid_hole(h) for h in m['chopHoles'])):
+        result.append('invalid MPP chop holes')
     for p in m.get('parts') or []:
         if not isinstance(p,dict):
             result.append('invalid MPP subpart'); continue
@@ -93,3 +126,24 @@ def figure_expression(r, dim):
     return (f'progn(aldShapeKey={sk(key)} aldMatches=aldMPPShapes[aldShapeKey] '
             'unless(aldMatches error("MPP generated geometry differs from checkpoint")) '
             'aldMPPShapes[aldShapeKey]=cdr(aldMatches) car(aldMatches))')
+
+
+def cleanup_replay(records):
+    """Remove only empty nets created from dangling native recipe names.
+
+    A source MPP recipe can retain a name whose OA net was deleted. rodCreatePath
+    creates that net again; exact figure connectivity has already been restored.
+    Never delete checkpoint nets, or detach any remaining native references.
+    """
+    names={r['name'] for r in records if r['kind']=='net'}
+    dangling={p['netName'] for r in records if r.get('mpp')
+              for p in r['mpp']['parts'] if p.get('netName')} - names
+    result=[]
+    for name in sorted(dangling):
+        result.append(f'''n=car(setof(net cv~>nets net~>name=={sk(name)}))
+          when(n
+            when(n~>figs || n~>allInstTerms || n~>pins || n~>terms || n~>groupMembers ||
+                 n~>textDisplays || n~>assocTextDisplays || n~>subnets || n~>routes
+              error("Unexpected connected MPP recipe net: %s" {sk(name)}))
+            unless(dbDeleteObject(n) error("Cannot remove empty MPP recipe net")))''')
+    return result

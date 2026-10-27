@@ -40,6 +40,39 @@ def test_exact_patch_preserves_recipe_and_generated_members(tmp_path):
     assert classify(old,new)['counts']['changed']==1
 
 
+def test_unchoppable_master_keeps_nil_and_replays_chopped_subparts():
+    raw=records()
+    raw[2]['mpp']['choppable']=None
+    raw[2]['mpp']['chopHoles']=[[[2000,0],[3000,0]]]
+    snapshot=canonicalize(raw)
+    assert not coverage(snapshot)
+    text='\n'.join(render(snapshot))
+    assert '?choppable nil' in text and 'rodAddMPPChopHole(' in text
+    del raw[2]['mpp']['choppable']
+    assert any('invalid MPP definition' in issue for issue in coverage(canonicalize(raw)))
+
+
+def test_native_chop_coordinates_are_dbu_and_cache_is_not_replayed():
+    from layoutdiff.mpp import capture_chop_holes
+    first=[[3000,0],[2000,0]]; second=[[6000,2000],[6000,1000]]
+    recipe={'nativeChopHoles':[[second,first],first]}
+    capture_chop_holes(recipe)
+    assert recipe=={'chopHoles':sorted([first,second])}
+    recipe={'nativeChopHoles':[first]}
+    capture_chop_holes(recipe)
+    assert recipe['unsupportedFeatures']==['native chop-hole encoding']
+
+
+def test_only_dangling_recipe_nets_are_cleanup_candidates():
+    from layoutdiff.mpp import cleanup_replay
+    raw=records(); raw[2]['mpp']['parts'][0]['netName']='VSS'
+    assert cleanup_replay(raw)==[]  # Retain even empty checkpoint nets.
+    raw[2]['mpp']['parts'][0]['netName']='deleted_net'
+    commands=cleanup_replay(raw)
+    assert len(commands)==1 and 'deleted_net' in commands[0]
+    assert 'allInstTerms' in commands[0] and 'Unexpected connected MPP recipe net' in commands[0]
+
+
 def test_native_equivalence_only_infers_uniform_rectangle_net():
     a=canonicalize(records()); raw=records();raw[2]['mpp']['parts'][0]['netName']='VSS';b=canonicalize(raw)
     assert via_default_projection(a,{},mpp_connectivity=True)[0]==via_default_projection(b,{},mpp_connectivity=True)[0]

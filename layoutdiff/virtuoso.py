@@ -46,7 +46,9 @@ def normalized_records(records):
         r["props"] = sorted_props(r.get("props"))
         if r.get('mpp'):
             from .core import encoded
+            from .mpp import capture_chop_holes
             r['mpp'] = dict(r['mpp'])
+            capture_chop_holes(r['mpp'])
             r['mpp']['parts'] = sorted((dict(p) for p in r['mpp']['parts'] or []), key=encoded)
         if r["kind"] == "cell":
             r["props"] = [p for p in r["props"] if p[0] not in BOOKKEEPING]
@@ -506,5 +508,7 @@ def render(snapshot, *, review_token=None):
             for member in r['members']:
                 commands.append(f"gm=dbAddObjectToGroup(figures[{sk(key)}] figures[{sk(member['target'])}]) unless(gm error(\"Logical group membership failed\"))")
                 commands += prop_cmds('gm', member['props'])
+    from .mpp import cleanup_replay
+    commands += cleanup_replay(records)
     commands.append("t)")
     return commands
