@@ -113,7 +113,8 @@ procedure(ALDGUIOmissionConfirm(token text final)
     if(final then "Layout Diff - Confirm rollback data loss (2/2)"
       else "Layout Diff - Unsupported elements (1/2)")
     hiCreateVerticalBoxLayout('aldOmissionLayout ?margins '(12 12 12 12) ?items list(
-      hiCreateMLTextField(?name 'aldOmissionText ?prompt "" ?editable nil ?enableWordWrap t)
+      hiCreateMLTextField(?name 'aldOmissionText ?prompt "" ?editable nil
+        ?hasHorizontalScrollbar nil ?enableWordWrap t)
       hiCreateButton(?name 'aldOmissionReport ?buttonText "View all omissions..."
         ?callback "ALDGUIEnqueue(list(\"quick-omission-report\" ALDGUIOmissionForm->aldToken))")
       hiCreateLabel(?name 'aldOmissionHint ?labelText "Close, Escape or Enter rejects this commit. The saved layout is kept.")))
