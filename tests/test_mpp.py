@@ -73,6 +73,49 @@ def test_only_dangling_recipe_nets_are_cleanup_candidates():
     assert 'allInstTerms' in commands[0] and 'Unexpected connected MPP recipe net' in commands[0]
 
 
+def test_projection_preserves_dangling_recipe_net_and_legacy_diff(tmp_path):
+    raw=records(); raw[2]['mpp']['parts'][0]['netName']='deleted_net'
+    expected=canonicalize(raw)
+    legacy=copy.deepcopy(raw)
+    for r in legacy:
+        r.pop('mpp',None); r.pop('mppOwner',None)
+    legacy=canonicalize(legacy)
+    source=from_snapshot(expected,tmp_path/'source')
+    out=project(source,tmp_path/'supported',tmp_path/'report.jsonl')
+    try:
+        assert out.omissions is None
+        assert out.materialize()==expected
+        assert out.omission_report.read_bytes()==b''
+        assert apply_diff(legacy,diff(legacy,out.materialize()))==expected
+    finally:
+        source.close(); out.close()
+
+
+def test_projection_existing_recipe_net_remains_a_dependency(tmp_path):
+    raw=records(); raw[2]['mpp']['parts'][0]['netName']='RECIPE_ONLY'
+    raw.append(dict(raw[1],name='RECIPE_ONLY',props=[['unsupported','future',1]]))
+    source=from_snapshot(canonicalize(raw),tmp_path/'source')
+    out=project(source,tmp_path/'supported',tmp_path/'report.jsonl')
+    try:
+        assert out.omissions['omitted']==3  # net, master, generated member
+        assert not any(r.get('mpp') or r.get('mppOwner') for _,r in out.records())
+        assert 'net:VSS' in out.materialize()['objects']
+    finally:
+        source.close(); out.close()
+
+
+def test_projection_missing_figure_net_still_omits_complete_mpp(tmp_path):
+    raw=records(); raw[-1]['net']='MISSING_ACTUAL_CONNECTION'
+    source=from_snapshot(canonicalize(raw),tmp_path/'source')
+    out=project(source,tmp_path/'supported',tmp_path/'report.jsonl')
+    try:
+        assert out.omissions['omitted']==2
+        assert 'missing referenced object' in out.omissions['counts']
+        assert not any(r.get('mpp') or r.get('mppOwner') for _,r in out.records())
+    finally:
+        source.close(); out.close()
+
+
 def test_native_equivalence_only_infers_uniform_rectangle_net():
     a=canonicalize(records()); raw=records();raw[2]['mpp']['parts'][0]['netName']='VSS';b=canonicalize(raw)
     assert via_default_projection(a,{},mpp_connectivity=True)[0]==via_default_projection(b,{},mpp_connectivity=True)[0]

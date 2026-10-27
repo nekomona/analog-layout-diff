@@ -34,6 +34,7 @@ def project(source, destination, report):
         CREATE TABLE objects(id INTEGER PRIMARY KEY, key TEXT UNIQUE, raw BLOB, kind TEXT, parent TEXT);
         CREATE TABLE targets(key TEXT PRIMARY KEY, owner INT, token INTEGER UNIQUE);
         CREATE TABLE edges(owner INT, target TEXT);
+        CREATE TABLE recipe_nets(owner INT, target TEXT);
         CREATE TABLE rejected(id INT PRIMARY KEY, reasons BLOB);
     ''')
     def reject(oid, reasons):
@@ -55,7 +56,12 @@ def project(source, destination, report):
             if r.get('mppOwner'):
                 links.append('@mpp:' + r['mppOwner'])
             if r.get('mpp'):
-                links += ['net:' + p['netName'] for p in r['mpp']['parts'] if p.get('netName')]
+                # ROD recipes can retain a name after its OA net was deleted.
+                # Native replay already removes the resulting empty net. Keep
+                # dependency edges only for nets that actually exist in source;
+                # an existing but unsupported net must still propagate omission.
+                db.executemany('INSERT INTO recipe_nets VALUES (?,?)',
+                    ((oid, 'net:' + p['netName']) for p in r['mpp']['parts'] if p.get('netName')))
             if r['kind'] == 'group':
                 links += [m['target'] for m in r.get('members') or []]
             if r.get('net'):
@@ -114,6 +120,8 @@ def project(source, destination, report):
             if db.execute('SELECT COUNT(*) FROM objects WHERE kind=?', (kind,)).fetchone()[0] > 1:
                 for oid, in db.execute('SELECT id FROM objects WHERE kind=?', (kind,)):
                     reject(oid, ['multiple ' + kind + ' records in one cellview'])
+        db.execute('INSERT INTO edges SELECT r.owner,r.target FROM recipe_nets r '
+                   'JOIN targets t ON t.key=r.target')
         # If a figure is omitted, its enclosing group is not a faithful group.
         # Keep other geometry and detach it, instead of deleting all members.
         db.execute("INSERT INTO edges SELECT g.id,m.key FROM objects g JOIN objects m "
