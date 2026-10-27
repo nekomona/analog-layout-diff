@@ -13,6 +13,8 @@ def record_issues(r):
     kind = r["kind"]
     from .oa_content import issues as oa_issues
     issues.extend(oa_issues(r))
+    from .mpp import issues as mpp_issues
+    issues.extend(mpp_issues(r))
     if kind not in SUPPORTED:
         issues.append("unsupported collection: " + str(r.get('category', kind)) if kind == "unsupported"
                       else "unsupported object type: " + kind)
@@ -120,6 +122,12 @@ def coverage(snapshot):
     issues = []
     groups = GroupCheck()
     try:
+        masters = Counter(r['mpp']['name'] for r in snapshot['objects'].values() if isinstance(r.get('mpp'),dict))
+        for key,r in snapshot['objects'].items():
+            if r.get('mppOwner') and masters[r['mppOwner']] != 1:
+                issues.append('missing or duplicate MPP master: ' + key)
+        if any(n != 1 for n in masters.values()):
+            issues.append('duplicate MPP master names')
         for key, r in snapshot["objects"].items():
             issues.extend(reason + ": " + key for reason in record_issues(r))
             groups.add(key, r)

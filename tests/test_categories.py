@@ -9,13 +9,13 @@ def rect(x=0, **kwargs):
             "props": [], **kwargs}
 
 
-def test_categories_preserve_storage_and_pair_only_attribute_edits():
+def test_categories_preserve_storage_and_pair_moves_and_attribute_edits():
     before = canonicalize([rect(0), rect(3), rect(5)])
     after = canonicalize([rect(0, props=[["note", "string", "changed"]]), rect(3), rect(8)])
     saved = copy.deepcopy([before, after])
     operations = diff(before, after)["operations"]
     result = CategoryDiff(operations)
-    assert result.rows == [["MET1 shapes", 1, 1, 1, 0]]
+    assert result.rows == [["MET1 shapes", 0, 2, 0, 0]]
     assert result.raw_operations == 4
     assert [before, after] == saved
     assert snapshot_changes(before, after) == operations

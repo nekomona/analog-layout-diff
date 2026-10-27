@@ -44,6 +44,10 @@ def normalized_records(records):
         for key in list(r):
             r[key] = untag(r[key])
         r["props"] = sorted_props(r.get("props"))
+        if r.get('mpp'):
+            from .core import encoded
+            r['mpp'] = dict(r['mpp'])
+            r['mpp']['parts'] = sorted((dict(p) for p in r['mpp']['parts'] or []), key=encoded)
         if r["kind"] == "cell":
             r["props"] = [p for p in r["props"] if p[0] not in BOOKKEEPING]
         if r.get("pin"):
@@ -202,6 +206,9 @@ class VirtuosoAdapter:
         issues = coverage(snapshot)
         if issues:
             raise ValueError("Snapshot cannot be faithfully reconstructed:\n" + "\n".join(issues))
+        if not self.loaded:
+            checked(self.client.load_il(Path(__file__).with_name('reader.il')))
+            self.loaded = True
         if lib != self.writable_library:
             raise ValueError("Destination is outside the configured test library")
         meta = snapshot["objects"].get("cell:")
@@ -248,7 +255,7 @@ class VirtuosoAdapter:
                     f"putd('{name} nil)" for name in helpers[offset:offset+64]) + " t)"))
         actual = self.capture(lib, cell, view, dependencies=False)
         equal = native_snapshot(actual) == native_snapshot(snapshot)
-        if not equal and any(r['kind'] == 'stdVia' for r in snapshot['objects'].values()):
+        if not equal and any(r['kind'] == 'stdVia' or r.get('mpp') for r in snapshot['objects'].values()):
             # IC23.1 dbCreateVia omits redundant defaults. Compare only row/column
             # overrides proven equal to this destination's viaDef defaults.
             from .native_equivalence import via_default_projection
@@ -259,11 +266,11 @@ class VirtuosoAdapter:
                 f'foreach(mapcar name {sk(names)} vd=techFindViaDefByName(tf name) '
                 'list(name when(vd nth(3 vd~>params)) when(vd nth(4 vd~>params)))))')))
             defaults = {name: {'cutRows': rows, 'cutColumns': columns} for name, rows, columns in values}
-            expected_comparison, expected_count = via_default_projection(snapshot, defaults)
-            actual_comparison, actual_count = via_default_projection(actual, defaults)
+            expected_comparison, expected_count = via_default_projection(snapshot, defaults, mpp_connectivity=True)
+            actual_comparison, actual_count = via_default_projection(actual, defaults, mpp_connectivity=True)
             equal = expected_comparison == actual_comparison
             self.last_readback_normalization = {
-                'method': 'technology-default-cut-array-overrides', 'equal': equal,
+                'method': 'technology-defaults-and-mpp-effective-connectivity', 'equal': equal,
                 'expected_redundant_parameters': expected_count,
                 'actual_redundant_parameters': actual_count, 'via_defaults': defaults}
             atomic_json(self.artifacts / ('readback_normalization_' + build_id + '.json'),
@@ -334,16 +341,21 @@ def render(snapshot, *, review_token=None):
                 cmds.append(f"unless(dbReplaceProp({var} {sk(n)} {sk(t)} {sk(v)}) error(\"Property creation failed\"))")
         return cmds
 
-    commands = ["let((o n p m it g gm nets terms insts groups pins figures)",
+    commands = ["let((o n p m it g gm nets terms insts groups pins figures aldMPPs aldMPPShapes aldRod aldShapeKey aldMatches)",
                 "nets=makeTable('aldN nil) terms=makeTable('aldT nil) insts=makeTable('aldI nil) groups=makeTable('aldG nil) pins=makeTable('aldP nil)",
                 "figures=makeTable('aldFigures nil)",
                 'figures["cell:"]=cv',
                 f"cv~>DBUPerUU={float(dbu)!r} cv~>userUnits={sk(meta['units'])} cv~>cellType={sk(meta['cellType'])}"]
     commands += prop_cmds("cv", meta["props"])
+    from .mpp import prepare_replay, figure_expression
+    mpp_commands = prepare_replay(records, dim)
     if review_token:
         commands.append(f"ALDGUIBeginReview({sk(review_token)} cv)")
     for key, r in replay_items(snapshot):
         kind = r["kind"]
+        if kind not in {'net', 'term'} and mpp_commands:
+            commands += mpp_commands
+            mpp_commands = []
         lpp = sk([r.get("layerName"), r.get("purpose")])
         def reference(field):
             return f'figures[{sk(r[field])}]' if r.get(field) else 'nil'
@@ -413,6 +425,8 @@ def render(snapshot, *, review_token=None):
             expr = f"dbCreateLabel(cv {lpp} {sk(dim(r['xy']))} {sk(r['theLabel'])} {sk(r['justify'])} {sk(r['orient'])} {sk(r['font'])} {sk(dim(r['height']))})"
         else:
             raise ValueError("Unsupported kind " + kind)
+        if r.get('mpp') or r.get('mppOwner'):
+            expr = figure_expression(r, dim)
         if kind == 'group':
             commands.append(f'o={expr} unless(o ALDReplayGroupFailure={sk([r["name"], r["defName"]])} '
                             f'error("Creation failed: group %s (definition %s)" {sk(r["name"])} {sk(r["defName"])}))')
@@ -422,6 +436,8 @@ def render(snapshot, *, review_token=None):
             commands.append(f"figures[{sk(key)}]=o")
         if review_token:
             commands.append(f"ALDGUIRemember({sk(review_token)} {sk(key)} o)")
+        if r.get('mpp') or r.get('mppOwner'):
+            commands.append('foreach(prop o~>prop dbDeleteObject(prop))')
         commands += prop_cmds("o", r.get("props", []))
         if kind in LINK_FIELDS and r.get('parent'):
             commands.append(f"o~>parent={reference('parent')}")
@@ -467,7 +483,10 @@ def render(snapshot, *, review_token=None):
             commands.append(f"o~>topology={sk(r['topology'])}")
         if kind == "arc":
             commands.append(f"o~>startAngle={sk(r['startAngle'])} o~>stopAngle={sk(r['stopAngle'])}")
-        if r.get("net") and kind != "term" and not r.get("pin"):
+        if (r.get('mpp') or r.get('mppOwner')) and not r.get('pin'):
+            net = f'nets[{sk(r["net"])}]' if r.get('net') else 'nil'
+            commands.append(f'o~>net={net}')
+        elif r.get("net") and kind != "term" and not r.get("pin"):
             commands.append(f"unless(dbAddFigToNet(o nets[{sk(r['net'])}]) error(\"Net assignment failed\"))")
         if r.get("group"):
             commands.append(f"figures[{sk(key)}]=o")

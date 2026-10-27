@@ -681,7 +681,7 @@ class GuiWorker:
                 f"Deleted shadows: {shadows['count']} ({len(shadows['fallbacks'])} bounding-box fallbacks)\n"
                 f"Metadata changes: {len(classification['metadata_changes'])}\n"
                 f"Hierarchy warnings: {len(self.adapter.last_dependency_warnings)}\n"
-                "Anonymous geometry moves appear as removal/addition.\n"
+                "Moves/stretches use conservative geometric matching; ambiguous pairs remain A/D.\n"
                 "Instance, array, and via highlights show their bounds.")
             if omission_warning:
                 summary = omission_warning + '\n\n' + summary

@@ -1,12 +1,9 @@
 """Disposable, bounded-memory category index. Git snapshots remain authoritative."""
 from collections import Counter
-import hashlib
-import json
 from pathlib import Path
 import tempfile
 from .categories import CategoryDiff, operation_category, status, operation_text, operation_excerpt, PAGE_SIZE
 from .core import encoded
-from .review import ATTRIBUTES, VISUAL
 from .storage import spool, strict_json
 from . import streaming
 
@@ -35,26 +32,24 @@ class ChangeIndex:
     def _build(self):
         self.db = spool(self.root / "categories.sqlite")
         db = self.db
-        db.execute("CREATE TABLE changes(key TEXT PRIMARY KEY, category TEXT, status TEXT, op BLOB, signature TEXT, rawsig BLOB) WITHOUT ROWID")
-        db.execute("CREATE INDEX pending ON changes(status,signature,key)")
+        db.execute("CREATE TABLE changes(key TEXT PRIMARY KEY, category TEXT, status TEXT, op BLOB) WITHOUT ROWID")
+        db.execute("CREATE INDEX pending ON changes(status,key)")
         self.raw_operations, self.kinds = 0, Counter()
-        eligible = VISUAL - {"inst", "mosaic"}
         for op in self.operations():
             self.raw_operations += 1
             record = op["after"] or op["before"]
             self.kinds[record["kind"]] += 1
-            sig = encoded({k: v for k, v in record.items() if k not in ATTRIBUTES}) if record["kind"] in eligible and (op['before'] is None or op['after'] is None) else None
-            db.execute("INSERT INTO changes VALUES (?,?,?,?,?,?)", (op["key"], self.label(op), status(op),
-                encoded(op), hashlib.sha256(sig).hexdigest() if sig else None, sig))
-        # Matching exactly follows the reference's sorted added/deleted queues.
-        for key, raw, signature, rawsig in db.execute("SELECT key,op,signature,rawsig FROM changes WHERE status='added' AND signature IS NOT NULL ORDER BY key"):
-            found = db.execute("SELECT key,op FROM changes WHERE status='deleted' AND signature=? AND rawsig=? ORDER BY key LIMIT 1", (signature, rawsig)).fetchone()
-            if found:
-                old_key, old_raw = found
-                op, old = strict_json(raw), strict_json(old_raw)
-                op.update(before=old["before"], before_key=old_key)
-                db.execute("DELETE FROM changes WHERE key=?", (old_key,))
-                db.execute("UPDATE changes SET op=?,status=?,category=? WHERE key=?", (encoded(op), status(op), self.label(op), key))
+            db.execute("INSERT INTO changes VALUES (?,?,?,?)", (op["key"], self.label(op), status(op), encoded(op)))
+        from .matching import pairs
+        def records(status, field):
+            for key,raw in db.execute('SELECT key,op FROM changes WHERE status=? ORDER BY key', (status,)):
+                yield key,strict_json(raw)[field]
+        for key,old_key,evidence in pairs(records('deleted','before'), records('added','after')):
+            op = strict_json(db.execute('SELECT op FROM changes WHERE key=?',(key,)).fetchone()[0])
+            old = strict_json(db.execute('SELECT op FROM changes WHERE key=?',(old_key,)).fetchone()[0])
+            op.update(before=old['before'], before_key=old_key, match=evidence)
+            db.execute('DELETE FROM changes WHERE key=?',(old_key,))
+            db.execute('UPDATE changes SET op=?,status=?,category=? WHERE key=?',(encoded(op),status(op),self.label(op),key))
         db.execute("CREATE INDEX pages ON changes(category,key)")
         db.commit()
         grouped = {}

@@ -1,9 +1,9 @@
 """Presentation-only categories over exact v1 operations. Never changes storage."""
-from collections import Counter, defaultdict, deque
+from collections import Counter, defaultdict
 import difflib
 import json
 from .core import encoded
-from .review import ATTRIBUTES, VISUAL, modification
+from .review import VISUAL, modification
 
 PAGE_SIZE = 10
 
@@ -17,6 +17,10 @@ def snapshot_changes(before, after):
 
 def category(record):
     kind = record["kind"]
+    if record.get('mpp'):
+        return str(record.get('layerName') or 'Unknown layer') + ' MPPs'
+    if record.get('mppOwner'):
+        return str(record.get('layerName') or 'Unknown layer') + ' MPP subshapes'
     if kind in {"inst", "mosaic", "dependency"}:
         master = record.get("libName", "?") + "/" + record.get("cellName", "?")
         if record.get("viewName", "layout") != "layout":
@@ -60,27 +64,14 @@ def operation_category(op):
 
 
 def display_operations(operations):
-    """Pair anonymous attribute edits for display, as in visual review.
-
-    Exact geometry/kind/master signatures must match. Geometry moves remain
-    additions/deletions. Multiplicities use queues, with no quadratic pop(0).
-    """
-    deleted = defaultdict(deque)
-    eligible = VISUAL - {"inst", "mosaic"}
-    def signature(record):
-        return encoded({k: v for k, v in record.items() if k not in ATTRIBUTES})
-    for op in operations:
-        if op["after"] is None and op["before"]["kind"] in eligible:
-            deleted[signature(op["before"])].append(op)
+    """Shared, conservative display pairing; exact stored operations survive."""
+    from .matching import pairs
+    deleted = {op['key']: op['before'] for op in operations if op['after'] is None}
+    added = {op['key']: op for op in operations if op['before'] is None}
     consumed, paired = set(), {}
-    if deleted:
-        for op in operations:
-            if op["before"] is None and op["after"]["kind"] in eligible:
-                candidates = deleted.get(signature(op["after"]))
-                if candidates:
-                    old = candidates.popleft()
-                    consumed.add(old["key"])
-                    paired[op["key"]] = {**op, "before": old["before"], "before_key": old["key"]}
+    for key, old, evidence in pairs(deleted.items(), ((k,op['after']) for k,op in added.items())):
+        consumed.add(old)
+        paired[key] = {**added[key], 'before': deleted[old], 'before_key': old, 'match': evidence}
     return [paired.get(op["key"], op) for op in operations if op["key"] not in consumed]
 
 
@@ -93,7 +84,8 @@ def operation_text(op):
         a[-1] += "\n"
     if b:
         b[-1] += "\n"
-    return (f"\n@@ {status(op).upper()} {op['key']} @@\n" +
+    evidence = f"Matched by {op['match']} (derived correspondence).\n" if op.get('match') else ''
+    return (f"\n@@ {status(op).upper()} {op['key']} @@\n" + evidence +
             "".join(difflib.unified_diff(a, b, fromfile=op.get("before_key", op["key"]),
                                          tofile=op["key"], n=max(len(a), len(b)))))
 
@@ -105,7 +97,8 @@ def operation_excerpt(op, limit=580):
     Reserve space for both sides so a long old value cannot hide the new one.
     """
     encoder = json.JSONEncoder(sort_keys=True, indent=2, ensure_ascii=True)
-    header = f"\n@@ {status(op).upper()} {op['key']} @@\n".encode("utf-8")
+    evidence = f"Matched by {op['match']}.\n" if op.get('match') else ''
+    header = (f"\n@@ {status(op).upper()} {op['key']} @@\n" + evidence).encode("utf-8")
     pieces = [header[:limit]]
     values = [(name, op[name]) for name in ("before", "after") if op[name] is not None]
     budget = max(0, (limit - len(pieces[0])) // len(values))
@@ -148,7 +141,7 @@ class CategoryDiff:
                 ("\n\nSelect a category for paged details. Open full diff includes every changed field." if interactive else
                    "\n\nView full diff shows every changed field. Saved snapshots retain all details.") +
                 "\nMN counts connectivity-only changes; M excludes these changes."
-                "\nMoves remain A/D."
+                "\nMoves/stretches use conservative geometric matching; ambiguous pairs remain A/D."
                 "\nMosaics count as array objects. Dependencies and metadata have separate rows.")
 
     def page(self, index, page):

@@ -77,14 +77,40 @@ procedure(ALDFigure(o dbu groupOrders)
         list("props" ALDProps(pin)) list("primary" o==pin~>fig) list("figureCount" length(pin~>figs))))))))
       ALDFields(o '("layerName" "purpose" "routeStatus") nil dbu))))
 
+; ROD is not an OA collection: its master and generated subshapes also appear
+; in cv~>shapes. Preserve both the editable recipe and exact generated geometry.
+procedure(ALDMPP(r dbu)
+  list(list("name" r~>name) list("choppable" rodIsMasterChoppable(r))
+    list("chopHoles" ALDScale(r~>chopHoles dbu))
+    list("unsupportedFeatures" append(when(r~>align list("alignment"))
+      append(when(r~>userHandleNames list("user handles"))
+        when(exists(part r~>subParts part~>pin) list("subpart pins")))))
+    list("parts" foreach(mapcar part r~>subParts
+      append(list(list("name" part~>name) list("type" part~>type) list("lpp" part~>lpp)
+        list("choppable" part~>choppable) list("netName" part~>netName) list("termName" part~>termName)
+        list("beginOffset" ALDScale(part~>beginOffset dbu)) list("endOffset" ALDScale(part~>endOffset dbu)))
+        case(part~>type
+          ("enclosurePath" list(list("enclosure" ALDScale(part~>enclosure dbu))))
+          (t append(list(list("width" ALDScale(part~>width dbu))
+            list("separation" ALDScale(part~>separation dbu)) list("justification" part~>justification))
+            when(part~>type=="rectangle" list(list("length" ALDScale(part~>length dbu))
+              list("gap" part~>gap) list("space" ALDScale(part~>space dbu))
+              list("beginSegOffset" ALDScale(part~>beginSegOffset dbu))
+              list("endSegOffset" ALDScale(part~>endSegOffset dbu)) list("diagonal" part~>diagonal)))))))))))
+
 procedure(ALDRead(lib cell view path)
-  let((cv port dbu fields dims kind master attrs vals ignored custom groupOrders index aldCaptureRefs aldNextRef)
+  let((cv port dbu fields dims kind master attrs vals ignored custom groupOrders index aldCaptureRefs aldNextRef mppMasters mppOwners)
     cv=dbOpenCellViewByType(lib cell view "maskLayout" "r")
     unless(cv error("Cannot open source layout read-only"))
     unwindProtect(progn(
       port=outfile(path)
       unless(port error("Cannot open snapshot output"))
       dbu=cv~>DBUPerUU
+      mppMasters=makeTable('aldMPPMasters nil) mppOwners=makeTable('aldMPPOwners nil)
+      foreach(rod rodGetNamedShapes(cv)
+        when(rod~>subParts
+          mppMasters[rod~>dbId]=rod
+          foreach(fig rod~>subShapes mppOwners[fig]=rod~>name)))
       ; User-approved capture scope (docs/OA_OBJECT_FINDINGS.md): omit these
       ; objects and their group links, but retain member shapes/vias and nets.
       ; Key by actual collection membership so Steiner variants are covered.
@@ -130,6 +156,8 @@ procedure(ALDRead(lib cell view path)
         custom=when(kind=="pathSeg" && member("custom" list(o~>beginStyle o~>endStyle))
           list(list("customExtensions" ALDScale(caddr(nth(3 dbGetPathSegStyle(o))) dbu))))
         when(kind=="textDisplay" custom=ALDTextRefs(o))
+        when(mppMasters[o] custom=append(custom list(list("mpp" ALDMPP(mppMasters[o] dbu)))))
+        when(mppOwners[o] custom=append(custom list(list("mppOwner" mppOwners[o]))))
         ALDEmit(port kind append(append(append(ALDFigure(o dbu groupOrders) ALDFields(o fields dims dbu)) custom)
           unless(member(kind '("rect" "ellipse" "polygon" "line" "path" "pathSeg" "label" "textDisplay" "donut" "arc"))
             list(list("diagnosticAttributes" ALDOpaqueObject(o))))) o))

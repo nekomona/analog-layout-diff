@@ -1,5 +1,4 @@
 """Review classification without changing snapshot identities or commit semantics."""
-from collections import defaultdict, deque
 from .core import encoded, validate
 
 VISUAL = {"rect", "polygon", "path", "pathSeg", "label", "ellipse", "line", "donut", "arc",
@@ -17,6 +16,10 @@ def without_connectivity(record):
     result = {k: v for k, v in without_group(record).items() if k not in {"net", "connections"}}
     if result.get("pin"):
         result["pin"] = {k: v for k, v in result["pin"].items() if k not in {"name", "term"}}
+    if result.get('mpp'):
+        result['mpp'] = {**result['mpp'], 'parts': sorted(
+            ({k:v for k,v in part.items() if k not in {'netName','termName'}}
+             for part in result['mpp']['parts']), key=encoded)}
     return result
 
 
@@ -42,24 +45,16 @@ def classify(before, after):
     for key in new.keys() & old.keys():
         groups[key] = modification(old[key], new[key])
         remaining.remove(key)
-    # Anonymous shapes have content identities. Match equal geometry first, then
-    # classify attribute-only edits. Geometry moves remain delete/add, not guesses.
-    candidates = defaultdict(deque)
-    def signature(record):
-        return encoded({k: v for k, v in record.items() if k not in ATTRIBUTES})
-    for key in sorted(remaining):
-        if old[key]["kind"] in VISUAL - {"inst", "mosaic"}:
-            candidates[signature(old[key])].append(key)
-    pairs = {}
-    for key in sorted(new.keys() - groups.keys()):
-        record = new[key]
-        matches = candidates[signature(record)] if record["kind"] in VISUAL - {"inst", "mosaic"} else []
-        if matches:
-            previous = matches.popleft()
-            remaining.remove(previous)
-            groups[key], pairs[key] = modification(old[previous], record), previous
-        else:
-            groups[key] = "new"
+    from .matching import pairs as match_pairs
+    pairs, evidence = {}, {}
+    unmatched = sorted(new.keys() - groups.keys())
+    for key, previous, reason in match_pairs(((k,old[k]) for k in sorted(remaining)),
+                                             ((k,new[k]) for k in unmatched)):
+        remaining.remove(previous)
+        groups[key], pairs[key] = modification(old[previous], new[key]), previous
+        evidence[key] = reason
+    for key in unmatched:
+        groups.setdefault(key, 'new')
     changed = {key for key, value in groups.items() if value == "changed"}
     net_changes = {key for key, value in groups.items() if value == "netChanged"}
     masters = {(r["libName"], r["cellName"], r["viewName"]) for key, r in new.items()
@@ -81,4 +76,5 @@ def classify(before, after):
     return {"groups": visual, "counts": {s: list(visual.values()).count(s) for s in ("untouched", "changed", "netChanged", "new")},
             "group_changes": group_changes(before, after, pairs),
             "removed": sorted(remaining), "attribute_pairs": pairs,
+            "pair_evidence": evidence,
             "metadata_changes": [k for k in sorted(new) if new[k]["kind"] not in VISUAL and groups[k] != "untouched"]}

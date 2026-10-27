@@ -52,6 +52,10 @@ def project(source, destination, report):
             if problems:
                 reject(oid, problems)
             links = references(r)
+            if r.get('mppOwner'):
+                links.append('@mpp:' + r['mppOwner'])
+            if r.get('mpp'):
+                links += ['net:' + p['netName'] for p in r['mpp']['parts'] if p.get('netName')]
             if r['kind'] == 'group':
                 links += [m['target'] for m in r.get('members') or []]
             if r.get('net'):
@@ -69,6 +73,8 @@ def project(source, destination, report):
         for oid, raw in db.execute('SELECT id,raw FROM objects'):
             r = json.loads(raw)
             aliases = []
+            if r.get('mpp'):
+                aliases.append('@mpp:' + r['mpp']['name'])
             if r.get('pin') and r['pin'].get('primary', True):
                 aliases.append(pin_key(r['pin']['term'], r['pin']['name']))
             if r['kind'] == 'inst':
@@ -112,6 +118,10 @@ def project(source, destination, report):
         # Keep other geometry and detach it, instead of deleting all members.
         db.execute("INSERT INTO edges SELECT g.id,m.key FROM objects g JOIN objects m "
                    "ON g.key='figGroup:'||m.parent WHERE g.kind='figGroup'")
+        # MPP reconstruction must be atomic: omitting any generated member
+        # otherwise regenerates geometry that the checkpoint says was omitted.
+        db.execute("INSERT INTO edges SELECT t.owner,o.key FROM edges e JOIN objects o ON o.id=e.owner "
+                   "JOIN targets t ON t.key=e.target WHERE e.target LIKE '@mpp:%'")
         db.execute('CREATE INDEX edges_target ON edges(target)')
         db.execute('CREATE INDEX edges_owner ON edges(owner)')
         db.execute('CREATE INDEX targets_owner ON targets(owner)')
