@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "analog-layout-diff"
-version = "0.15.1"
+version = "0.15.2"
 description = "Git snapshots and semantic diffs for Virtuoso analog layouts"
 requires-python = ">=3.10"
 dependencies = []

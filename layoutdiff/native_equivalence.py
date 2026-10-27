@@ -6,7 +6,57 @@ from .core import canonicalize, digest, encoded
 from .storage import NAMED
 
 
-def via_default_projection(snapshot, defaults, *, mpp_connectivity=False):
+def mpp_path_cache_aliases(expected, actual):
+    """Recognize the observed IC23.1 held-cell offset-path recipe cache change.
+
+    Accept only a dangling recipe name becoming its unchanged member's actual
+    net. A different dangling name, a live recipe net, ambiguous members, pins,
+    or any other recipe/member change is not this cache behavior.
+    """
+    def index(state):
+        masters, members, nets = defaultdict(list), defaultdict(list), set()
+        for r in state['objects'].values():
+            if r['kind'] == 'net': nets.add(r['name'])
+            if r.get('mpp'): masters[r['mpp']['name']].append(r['mpp'])
+            if r.get('mppOwner'):
+                members[(r['mppOwner'], r.get('layerName'), r.get('purpose'))].append(r)
+        return masters, members, nets
+
+    old_masters, old_members, old_nets = index(expected)
+    new_masters, new_members, new_nets = index(actual)
+    aliases = []
+    for name, masters in sorted(old_masters.items()):
+        peers = new_masters.get(name, [])
+        if len(masters) != 1 or len(peers) != 1: continue
+        old, new = masters[0], peers[0]
+        old_counts = Counter(tuple(p['lpp']) for p in old['parts'])
+        new_parts = defaultdict(list)
+        for p in new['parts']: new_parts[tuple(p['lpp'])].append(p)
+        for p in old['parts']:
+            lpp = tuple(p['lpp']); key = (name, *lpp)
+            parts = new_parts.get(lpp, [])
+            members, peers = old_members.get(key, []), new_members.get(key, [])
+            stale = p.get('netName')
+            if (p['type'] != 'offsetPath' or not stale or p.get('termName')
+                    or stale in old_nets or stale in new_nets or old_counts[lpp] != 1
+                    or len(parts) != 1 or len(members) != 1 or len(peers) != 1):
+                continue
+            member, peer = members[0], peers[0]
+            effective = member.get('net')
+            if (member['kind'] != 'path' or member.get('pin') or member != peer
+                    or not effective or effective not in old_nets or effective not in new_nets
+                    or parts[0].get('netName') != effective):
+                continue
+            # Generated subpart numbering is already compared by role below.
+            def recipe(part):
+                return {k: v for k, v in part.items() if k != 'netName'
+                        and not (k == 'name' and isinstance(v, str) and re.fullmatch(r'subpart\d+', v))}
+            if recipe(p) == recipe(parts[0]):
+                aliases.append(dict(mpp=name, lpp=list(lpp), stored=stale, effective=effective))
+    return aliases
+
+
+def via_default_projection(snapshot, defaults, *, mpp_connectivity=False, mpp_cache_aliases=()):
     """Remove only proven redundant integer cut-array overrides for comparison.
 
     Re-key logical-group references after via keys change. Refuse an ambiguous
@@ -16,6 +66,8 @@ def via_default_projection(snapshot, defaults, *, mpp_connectivity=False):
                if r['kind'] != 'dependency'}
     normalized = 0
     if mpp_connectivity:
+        cache_aliases = {(a['mpp'], tuple(a['lpp']), a['stored']): a['effective']
+                         for a in mpp_cache_aliases}
         # IC23.1 promotes extracted subrectangle connectivity into the ROD
         # recipe when rebuilt. The ROD manual specifies this propagation on
         # the next MPP edit. Accept only one rectangle set on this LPP, all
@@ -39,6 +91,9 @@ def via_default_projection(snapshot, defaults, *, mpp_connectivity=False):
             counts = Counter(tuple(p['lpp']) for p in m['parts'] if p['type'] == 'rectangle')
             for p in m['parts']:
                 k = (m['name'], *p['lpp'])
+                alias = cache_aliases.get((m['name'], tuple(p['lpp']), p.get('netName')))
+                if p['type'] == 'offsetPath' and alias:
+                    p['netName'] = alias; normalized += 1
                 values = nets.get(k, set())
                 if (p['type'] == 'rectangle' and counts[tuple(p['lpp'])] == 1
                         and p['netName'] is None and not p['termName']

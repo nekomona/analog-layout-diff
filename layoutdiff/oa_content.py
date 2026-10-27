@@ -13,11 +13,16 @@ def references(record):
 
 def replay_items(snapshot):
     """Stable base order, then dependency order for new annotation records."""
+    from .core import encoded
     objects = snapshot['objects']
     order = {'net': 0, 'term': 1, 'figGroup': 2, 'group': 2, 'inst': 3, 'mosaic': 3}
     items = sorted(((k, r) for k, r in objects.items() if r['kind'] not in {'cell', 'dependency'}),
                    key=lambda item: (order.get(item[1]['kind'], 4),
-                                     0 if (item[1].get('pin') or {}).get('primary') else 1))
+                                     0 if (item[1].get('pin') or {}).get('primary') else 1,
+                                     encoded(item[1]), item[0]))
+    # JSON objects have no semantic iteration order. Use the same content order
+    # as canonicalize(), including after v2/Git decoding. Native ROD callbacks
+    # make an arbitrary input-order tie-breaker observably change metadata.
     ordinary = [(k, r) for k, r in items if r['kind'] not in LINK_FIELDS]
     linked = {k: r for k, r in items if r['kind'] in LINK_FIELDS}
     from .logical_groups import pin_key

@@ -255,12 +255,23 @@ class VirtuosoAdapter:
             for offset in range(0, len(helpers), 64):
                 checked(self.client.execute_skill("progn(" + " ".join(
                     f"putd('{name} nil)" for name in helpers[offset:offset+64]) + " t)"))
+        if review_token:
+            # A held MPP can receive deferred ROD connectivity updates after
+            # the editor's save. Settle only this fresh review cell, then check
+            # its complete readback below before permitting a read-only window.
+            checked(self.client.execute_skill(
+                f'let((cv) cv=ALDGUIHeld[{sk(review_token)}] '
+                f'unless(cv && cv~>libName=={sk(lib)} && cv~>cellName=={sk(cell)} '
+                f'&& cv~>viewName=={sk(view)} error("Review cell identity changed")) '
+                'when(dbIsCellViewModified(cv) '
+                'unless(dbSave(cv) error("Cannot save generated review cell"))) '
+                'when(dbIsCellViewModified(cv) error("Generated review cell did not settle")) t)', timeout=120))
         actual = self.capture(lib, cell, view, dependencies=False)
         equal = native_snapshot(actual) == native_snapshot(snapshot)
         if not equal and any(r['kind'] == 'stdVia' or r.get('mpp') for r in snapshot['objects'].values()):
             # IC23.1 dbCreateVia omits redundant defaults. Compare only row/column
             # overrides proven equal to this destination's viaDef defaults.
-            from .native_equivalence import via_default_projection
+            from .native_equivalence import via_default_projection, mpp_path_cache_aliases
             names = sorted({r['viaDef'] for state in (snapshot, actual)
                             for r in state['objects'].values() if r['kind'] == 'stdVia'})
             values = loads(checked(self.client.execute_skill(
@@ -268,13 +279,16 @@ class VirtuosoAdapter:
                 f'foreach(mapcar name {sk(names)} vd=techFindViaDefByName(tf name) '
                 'list(name when(vd nth(3 vd~>params)) when(vd nth(4 vd~>params)))))')))
             defaults = {name: {'cutRows': rows, 'cutColumns': columns} for name, rows, columns in values}
-            expected_comparison, expected_count = via_default_projection(snapshot, defaults, mpp_connectivity=True)
+            cache_aliases = mpp_path_cache_aliases(snapshot, actual) if review_token else []
+            expected_comparison, expected_count = via_default_projection(
+                snapshot, defaults, mpp_connectivity=True, mpp_cache_aliases=cache_aliases)
             actual_comparison, actual_count = via_default_projection(actual, defaults, mpp_connectivity=True)
             equal = expected_comparison == actual_comparison
             self.last_readback_normalization = {
                 'method': 'technology-defaults-and-mpp-effective-connectivity', 'equal': equal,
                 'expected_redundant_parameters': expected_count,
-                'actual_redundant_parameters': actual_count, 'via_defaults': defaults}
+                'actual_redundant_parameters': actual_count, 'via_defaults': defaults,
+                'mpp_recipe_cache_aliases': cache_aliases}
             atomic_json(self.artifacts / ('readback_normalization_' + build_id + '.json'),
                         self.last_readback_normalization)
         if not equal:
@@ -503,7 +517,7 @@ def render(snapshot, *, review_token=None):
     for key, r in sorted(((k, r) for k, r in snapshot["objects"].items() if r.get("group")),
                          key=lambda item: (item[1]["group"], item[1].get("groupOrder", 0), item[0])):
         commands.append(f"unless(dbAddFigToFigGroup(groups[{sk(r['group'])}] figures[{sk(key)}]) error(\"Group assignment failed\"))")
-    for key, r in snapshot['objects'].items():
+    for key, r in sorted(snapshot['objects'].items()):
         if r['kind'] == 'group':
             for member in r['members']:
                 commands.append(f"gm=dbAddObjectToGroup(figures[{sk(key)}] figures[{sk(member['target'])}]) unless(gm error(\"Logical group membership failed\"))")

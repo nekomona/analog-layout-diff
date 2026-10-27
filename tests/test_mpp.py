@@ -1,4 +1,5 @@
 import copy
+import json
 from layoutdiff.core import canonicalize, diff, apply_diff, encoded
 from layoutdiff.virtuoso import render
 from layoutdiff.support import coverage
@@ -38,6 +39,20 @@ def test_exact_patch_preserves_recipe_and_generated_members(tmp_path):
     try: assert a.materialize()==new
     finally: a.close()
     assert classify(old,new)['counts']['changed']==1
+
+
+def test_replay_is_invariant_to_json_and_git_store_record_order(tmp_path):
+    snapshot=canonicalize(records())
+    source=from_snapshot(snapshot,tmp_path/'stored')
+    try:
+        variants=[json.loads(json.dumps(snapshot,sort_keys=True)),source.materialize(),
+                  {**snapshot,'objects':dict(reversed(list(snapshot['objects'].items())))}]
+        expected=render(snapshot)
+        for variant in variants:
+            assert variant==snapshot
+            assert render(variant)==expected
+    finally:
+        source.close()
 
 
 def test_unchoppable_master_keeps_nil_and_replays_chopped_subparts():
