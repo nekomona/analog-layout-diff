@@ -4,8 +4,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from layoutdiff.core import empty_snapshot
-from layoutdiff.history import History, read_json
+from layoutdiff.data.core import empty_snapshot
+from layoutdiff.data.history import History, read_json
 from .codec import read_layout, write_layout
 from .render_diff import load_snapshot, render_image
 from .review import export_review, load_style, review_counts

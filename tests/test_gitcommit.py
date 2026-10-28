@@ -1,7 +1,7 @@
 import pytest
-from layoutdiff import gitcommit as gc
-from layoutdiff.core import canonicalize
-from layoutdiff.gitstore import GitSnapshots, snapshot_path
+import layoutdiff.git.commit as gc
+from layoutdiff.data.core import canonicalize
+from layoutdiff.git.store import GitSnapshots, snapshot_path
 
 IDENTITY = ["TEST", "top", "layout"]
 def snapshot(value):
@@ -130,7 +130,7 @@ def test_lost_commit_response_does_not_restore_old_layout_over_new_commit(repo, 
 
 
 def test_supervisor_only_releases_its_registered_lock(tmp_path):
-    from layoutdiff.history import atomic_json
+    from layoutdiff.data.history import atomic_json
     lock, registry = tmp_path / "index.lock", tmp_path / "locks.json"
     lock.write_text("own-token")
     atomic_json(registry, [{"pid": 123, "path": str(lock), "token": "own-token"}])

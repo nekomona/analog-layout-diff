@@ -11,8 +11,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from layoutdiff.core import empty_snapshot
-from layoutdiff.history import read_json
+from layoutdiff.data.core import empty_snapshot
+from layoutdiff.data.history import read_json
 from .api import view_api
 from .codec import read_layout, validate_klayout
 from .review import build_review, configure_view, load_style, review_counts

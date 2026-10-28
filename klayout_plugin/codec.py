@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .api import db
 
-from layoutdiff.core import canonicalize, encoded, validate
+from layoutdiff.data.core import canonicalize, encoded, validate
 
 BACKEND = "klayout-static/1"
 

@@ -1,10 +1,10 @@
 import copy
 import pytest
-from layoutdiff.core import canonicalize, diff, apply_diff
-from layoutdiff.review import classify
-from layoutdiff.categories import CategoryDiff
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.storage import write_records
+from layoutdiff.data.core import canonicalize, diff, apply_diff
+from layoutdiff.comparison.review import classify
+from layoutdiff.comparison.categories import CategoryDiff
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.data.storage import write_records
 
 
 def rect(x=0, y=0, w=10, h=20, layer='MET1', **attrs):
@@ -101,7 +101,7 @@ def test_via_move_does_not_cross_connectivity_definition_or_purpose(tmp_path,fie
 
 
 def test_via_duplicate_multiplicity_and_input_order(tmp_path):
-    from layoutdiff.matching import pairs
+    from layoutdiff.comparison.matching import pairs
     old=canonicalize([via(),via()])['objects'];new=canonicalize([via(400),via(400)])['objects']
     assert list(pairs(old.items(),new.items()))==[]
     a=[(str(i),via(i*1000)) for i in range(8)]

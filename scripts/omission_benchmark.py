@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 import tempfile
 import time
-from layoutdiff.storage import write_records
-from layoutdiff.omissions import project
+from layoutdiff.data.storage import write_records
+from layoutdiff.virtuoso.omissions import project
 
 out = Path(__file__).resolve().parents[1]/'evidence/omissions'
 out.mkdir(parents=True, exist_ok=True)

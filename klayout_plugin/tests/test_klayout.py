@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from layoutdiff.core import apply_diff, canonicalize, diff, digest, empty_snapshot
-from layoutdiff.history import History, read_json
+from layoutdiff.data.core import apply_diff, canonicalize, diff, digest, empty_snapshot
+from layoutdiff.data.history import History, read_json
 from klayout_plugin.codec import (db, capture_layout, read_layout, reconstruct,
                                    validate_klayout, write_layout)
 from klayout_plugin.review import (DEFAULT_STYLE, build_review, classify, export_review,

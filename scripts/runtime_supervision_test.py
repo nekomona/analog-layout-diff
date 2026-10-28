@@ -8,7 +8,7 @@ import tempfile
 import time
 import unittest
 
-from layoutdiff.runtime import process_identity
+from layoutdiff.runtime.supervisor import process_identity
 
 
 def until(predicate, seconds=8):
@@ -67,7 +67,7 @@ while not (root/'STOP').exists(): time.sleep(.05)
         self.temp.cleanup()
 
     def start(self, mode="normal"):
-        code = ("from layoutdiff.runtime import supervise; supervise(" +
+        code = ("from layoutdiff.runtime.supervisor import supervise; supervise(" +
                 repr(str(self.root)) + "," + str(self.parent.pid) + ",65081,'TEST',worker_command=" +
                 repr([sys.executable, str(self.worker_source), str(self.root), mode]) + ",grace=.2)")
         p = subprocess.Popen([sys.executable, "-u", "-c", code], stdin=subprocess.PIPE,
@@ -114,7 +114,7 @@ while not (root/'STOP').exists(): time.sleep(.05)
 
     def test_duplicate_supervisor_refused(self):
         p = self.start()
-        code = ("from layoutdiff.runtime import supervise; supervise(" + repr(str(self.root)) +
+        code = ("from layoutdiff.runtime.supervisor import supervise; supervise(" + repr(str(self.root)) +
                 "," + str(self.parent.pid) + ",65081,'TEST')")
         result = subprocess.run([sys.executable, "-c", code], input=b"STOP\n", capture_output=True)
         self.assertNotEqual(result.returncode, 0)

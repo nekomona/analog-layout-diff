@@ -5,9 +5,9 @@ import sys
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso import VirtuosoAdapter
-from layoutdiff.support import UnsupportedContentError
-from layoutdiff.history import atomic_json
+from layoutdiff.virtuoso.adapter import VirtuosoAdapter
+from layoutdiff.virtuoso.support import UnsupportedContentError
+from layoutdiff.data.history import atomic_json
 
 lib, cell, out = sys.argv[1:]
 out = Path(out)

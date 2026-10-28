@@ -1,12 +1,12 @@
 import copy
-from layoutdiff.core import canonicalize, diff
-from layoutdiff.review import classify, modification
-from layoutdiff.categories import CategoryDiff
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.storage import from_snapshot
-from layoutdiff.review_groups import boundary_targets
-from layoutdiff.gui import display_resource, GuiWorker
-from layoutdiff.history import atomic_json
+from layoutdiff.data.core import canonicalize, diff
+from layoutdiff.comparison.review import classify, modification
+from layoutdiff.comparison.categories import CategoryDiff
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.data.storage import from_snapshot
+from layoutdiff.comparison.review_groups import boundary_targets
+from layoutdiff.ui.worker import display_resource, GuiWorker
+from layoutdiff.data.history import atomic_json
 
 
 def rect(x=0, **extra):
@@ -136,13 +136,13 @@ def test_deleted_overlays_exclude_matched_edits_and_metadata(tmp_path):
     old = canonicalize([rect(), rect(4), {'kind': 'net', 'name': 'old', 'props': []}])
     new = canonicalize([{**rect(), 'props': [['note', 'string', 'edit']]}])
     result = classify(old, new)
-    from layoutdiff.review import VISUAL
+    from layoutdiff.comparison.review import VISUAL
     deleted = [old['objects'][k] for k in result['removed'] if old['objects'][k]['kind'] in VISUAL]
     assert deleted == [rect(4)]
 
 
 def test_shadow_helper_is_shared_and_released(tmp_path, monkeypatch):
-    import layoutdiff.gui as gui
+    import layoutdiff.ui.worker as gui
     worker = GuiWorker(None, tmp_path)
     calls, builds = [], []
     class Adapter:

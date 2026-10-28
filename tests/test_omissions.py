@@ -4,14 +4,14 @@ import uuid
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
-from layoutdiff.core import canonicalize
-from layoutdiff.storage import from_snapshot
-from layoutdiff.omissions import project, AUDIT, DETAILS
-from layoutdiff.support import coverage, checked_records, UnsupportedContentError
-from layoutdiff.virtuoso import normalize
-from layoutdiff.gui import GuiWorker
-from layoutdiff import gitcommit as gc
-from layoutdiff.gitstore import GitSnapshots, path_identity
+from layoutdiff.data.core import canonicalize
+from layoutdiff.data.storage import from_snapshot
+from layoutdiff.virtuoso.omissions import project, AUDIT, DETAILS
+from layoutdiff.virtuoso.support import coverage, checked_records, UnsupportedContentError
+from layoutdiff.virtuoso.adapter import normalize
+from layoutdiff.ui.worker import GuiWorker
+import layoutdiff.git.commit as gc
+from layoutdiff.git.store import GitSnapshots, path_identity
 from test_oa_content import records as linked_records
 
 
@@ -261,7 +261,7 @@ def test_unknown_only_change_still_produces_audited_commit(worker):
     worker.source[-1]['detail'] = 'unknown v2'
     last = second(worker)
     result = worker.quick_omit_confirm(last['token'])
-    from layoutdiff.browser import HistoryBrowser, RepositoryBrowser
+    from layoutdiff.ui.browser import HistoryBrowser, RepositoryBrowser
     browser = HistoryBrowser(None, worker.identity, worker.git_repository())
     detail = browser.detail(result['git_commit'])
     assert all(n == 0 for n in detail['counts'].values())

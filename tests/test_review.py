@@ -1,6 +1,6 @@
-from layoutdiff.core import canonicalize
-from layoutdiff.review import classify
-from layoutdiff.gui import display_resource, swatch
+from layoutdiff.data.core import canonicalize
+from layoutdiff.comparison.review import classify
+from layoutdiff.ui.worker import display_resource, swatch
 import pytest
 
 
@@ -36,8 +36,8 @@ def test_style_validation_and_color_icon():
 
 
 def test_cleanup_refuses_unowned_cells_before_contacting_virtuoso(tmp_path):
-    from layoutdiff.gui import GuiWorker
-    from layoutdiff.history import atomic_json
+    from layoutdiff.ui.worker import GuiWorker
+    from layoutdiff.data.history import atomic_json
     worker = GuiWorker(None, tmp_path)
     token = "a" * 32
     atomic_json(tmp_path / "reviews" / token / "review.json", {

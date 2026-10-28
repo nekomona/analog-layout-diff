@@ -2,12 +2,12 @@ import copy
 import json
 from pathlib import Path
 import pytest
-from layoutdiff.core import canonicalize, diff, apply_diff, empty_snapshot
-from layoutdiff.dependencies import compare_dependencies, native_snapshot
-from layoutdiff.gittools import git, setup, extract, textconv
-from layoutdiff.hash_views import fingerprint
-from layoutdiff.history import atomic_json, History
-from layoutdiff.virtuoso import VirtuosoAdapter, coverage
+from layoutdiff.data.core import canonicalize, diff, apply_diff, empty_snapshot
+from layoutdiff.virtuoso.dependencies import compare_dependencies, native_snapshot
+from layoutdiff.git.tools import git, setup, extract, textconv
+from layoutdiff.virtuoso.hash_views import fingerprint
+from layoutdiff.data.history import atomic_json, History
+from layoutdiff.virtuoso.adapter import VirtuosoAdapter, coverage
 
 
 def dep(hash_value="a" * 64):
@@ -119,7 +119,7 @@ def test_git_driver_rejects_tampering():
 def test_cli_replay_live_check_failure_does_not_block(tmp_path, monkeypatch):
     import sys
     import types
-    from layoutdiff.cli import main
+    from layoutdiff.ui.cli import main
     history = History(tmp_path / "history")
     history.init()
     snapshot = canonicalize([dep()])

@@ -2,13 +2,13 @@ import copy
 import json
 import random
 import pytest
-from layoutdiff.core import canonicalize, digest, diff
-from layoutdiff.storage import from_snapshot, write_records, Snapshot, encoded
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.categories import CategoryDiff
-from layoutdiff import gitcommit as gc
-from layoutdiff.gitstore import GitSnapshots, snapshot_directory, snapshot_path
-from layoutdiff.browser import HistoryBrowser
+from layoutdiff.data.core import canonicalize, digest, diff
+from layoutdiff.data.storage import from_snapshot, write_records, Snapshot, encoded
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.comparison.categories import CategoryDiff
+import layoutdiff.git.commit as gc
+from layoutdiff.git.store import GitSnapshots, snapshot_directory, snapshot_path
+from layoutdiff.ui.browser import HistoryBrowser
 from test_gitcommit import repo, IDENTITY, snapshot
 
 
@@ -36,8 +36,8 @@ def test_missing_null_empty_and_numeric_types_remain_distinct(tmp_path):
 
 
 def test_forward_reverse_stream_replay_and_corrupt_patch(tmp_path):
-    from layoutdiff.streampatch import create, apply
-    from layoutdiff.core import apply_diff
+    from layoutdiff.data.streampatch import create, apply
+    from layoutdiff.data.core import apply_diff
     before = canonicalize([{"kind": "inst", "name": "M", "v": 0}, {"kind": "rect", "x": 2}])
     after = canonicalize([{"kind": "inst", "name": "M", "v": False}, {"kind": "rect", "x": 4}])
     a, b = from_snapshot(before, tmp_path / "a"), from_snapshot(after, tmp_path / "b")
@@ -121,8 +121,8 @@ def test_v2_migration_lazy_history_and_git_isolation(repo, tmp_path):
 
 
 def test_sequential_stream_history_from_empty(tmp_path):
-    from layoutdiff.streampatch import create, apply
-    from layoutdiff.core import empty_snapshot
+    from layoutdiff.data.streampatch import create, apply
+    from layoutdiff.data.core import empty_snapshot
     previous = from_snapshot(empty_snapshot(), tmp_path / "initial")
     parent = None
     for step in range(8):
@@ -156,8 +156,8 @@ def test_v2_failure_rolls_back_deleted_v1_and_preserves_index(repo, tmp_path, mo
 
 
 def test_patch_accepts_two_large_records_without_weakening_snapshot_limit(tmp_path, monkeypatch):
-    from layoutdiff import storage
-    from layoutdiff.streampatch import create, apply
+    import layoutdiff.data.storage as storage
+    from layoutdiff.data.streampatch import create, apply
     monkeypatch.setattr(storage, "MAX_LINE", 32768)
     a = write_records([{"kind": "inst", "name": "I", "payload": "a" * 20000}], tmp_path / "a")
     b = write_records([{"kind": "inst", "name": "I", "payload": "b" * 20000}], tmp_path / "b")

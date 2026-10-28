@@ -1,8 +1,8 @@
 import copy
 from types import SimpleNamespace
 import pytest
-from layoutdiff.core import canonicalize
-from layoutdiff.virtuoso import VirtuosoAdapter
+from layoutdiff.data.core import canonicalize
+from layoutdiff.virtuoso.adapter import VirtuosoAdapter
 
 
 def snapshot(definition='lxImplicitBus'):

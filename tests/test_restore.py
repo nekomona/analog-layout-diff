@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import json
 import pytest
-from layoutdiff import restore
+import layoutdiff.ui.restore as restore
 
 
 def worker(tmp_path, *, copy_error=False, rollback_error=False, local=False):

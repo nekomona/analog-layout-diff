@@ -7,12 +7,12 @@ import random
 import subprocess
 import tempfile
 import time
-from layoutdiff.core import canonicalize, diff, encoded
-from layoutdiff.storage import from_snapshot
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.streampatch import create, apply
-from layoutdiff.streaming import merge, wire_row, merge_python, apply_python
-from layoutdiff.acceleration import info, executable
+from layoutdiff.data.core import canonicalize, diff, encoded
+from layoutdiff.data.storage import from_snapshot
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.data.streampatch import create, apply
+from layoutdiff.data.streaming import merge, wire_row, merge_python, apply_python
+from layoutdiff.data.acceleration import info, executable
 
 start = time.perf_counter()
 assert info()["availability"] == "verified", info()

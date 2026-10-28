@@ -4,14 +4,14 @@ import random
 
 import pytest
 
-from layoutdiff.core import canonicalize, diff, apply_diff, empty_snapshot
-from layoutdiff.virtuoso import normalize, render
-from layoutdiff.support import coverage, checked_records, UnsupportedContentError
-from layoutdiff.storage import from_snapshot
-from layoutdiff.streampatch import create, apply
-from layoutdiff.categories import CategoryDiff, category
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.review import classify
+from layoutdiff.data.core import canonicalize, diff, apply_diff, empty_snapshot
+from layoutdiff.virtuoso.adapter import normalize, render
+from layoutdiff.virtuoso.support import coverage, checked_records, UnsupportedContentError
+from layoutdiff.data.storage import from_snapshot
+from layoutdiff.data.streampatch import create, apply
+from layoutdiff.comparison.categories import CategoryDiff, category
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.comparison.review import classify
 
 
 def records():

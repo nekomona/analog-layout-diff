@@ -1,6 +1,6 @@
 import pytest
-from layoutdiff.history import History, read_json
-from layoutdiff.core import canonicalize
+from layoutdiff.data.history import History, read_json
+from layoutdiff.data.core import canonicalize
 
 
 def test_append_replay_noop_and_concurrent_writer(tmp_path):

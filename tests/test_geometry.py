@@ -1,5 +1,5 @@
 import klayout.db as kdb
-from layoutdiff.geometry import compare_gds
+from layoutdiff.virtuoso.geometry import compare_gds
 
 
 def make(path, dx=0, text="a"):

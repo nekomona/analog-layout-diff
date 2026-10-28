@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from layoutdiff.history import History, atomic_json
+from layoutdiff.data.history import History, atomic_json
 from .codec import db, capture_layout, reconstruct, write_layout
 from .review import export_review, review_counts
 from .render_diff import render_image

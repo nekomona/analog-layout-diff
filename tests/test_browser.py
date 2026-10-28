@@ -1,7 +1,7 @@
-from layoutdiff import gitcommit as gc
-from layoutdiff.browser import HistoryBrowser, field_text, diff_html
-from layoutdiff.core import canonicalize
-from layoutdiff.history import History
+import layoutdiff.git.commit as gc
+from layoutdiff.ui.browser import HistoryBrowser, field_text, diff_html
+from layoutdiff.data.core import canonicalize
+from layoutdiff.data.history import History
 
 
 def test_git_browser_metadata_files_counts_and_readonly(tmp_path):

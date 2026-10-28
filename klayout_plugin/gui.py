@@ -8,8 +8,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from layoutdiff.core import empty_snapshot
-from layoutdiff.history import History, read_json
+from layoutdiff.data.core import empty_snapshot
+from layoutdiff.data.history import History, read_json
 from .codec import capture_layout, write_layout
 from .review import build_review, configure_view, load_style, review_counts
 

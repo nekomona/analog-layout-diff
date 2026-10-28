@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 import pytest
-from layoutdiff import gitcommit as gc
-from layoutdiff.browser import RepositoryBrowser
-from layoutdiff.core import canonicalize
-from layoutdiff.workspace import allocate, reap
+import layoutdiff.git.commit as gc
+from layoutdiff.ui.browser import RepositoryBrowser
+from layoutdiff.data.core import canonicalize
+from layoutdiff.runtime.workspace import allocate, reap
 
 
 def test_repository_graph_cells_refs_and_no_checkout(tmp_path):
@@ -40,7 +40,7 @@ def test_repository_graph_cells_refs_and_no_checkout(tmp_path):
 
 
 def test_repository_groups_v2_components_and_deleted_cells(tmp_path):
-    from layoutdiff.storage import from_snapshot
+    from layoutdiff.data.storage import from_snapshot
     repo = tmp_path / 'repo'; repo.mkdir()
     gc.git(repo, 'init')
     gc.git(repo, 'config', 'user.name', 'Workflow Test')
@@ -99,7 +99,7 @@ def test_reap_refuses_unowned_paths_and_tampered_manifest(tmp_path):
 def test_native_workflow_definitions_are_complete_top_level_forms():
     # Cadence load() can return success after an incomplete trailing procedure;
     # a delimiter check catches that before runtime callbacks go undefined.
-    source = Path(__file__).resolve().parents[1]/'layoutdiff'
+    source = Path(__file__).resolve().parents[1]/'layoutdiff/ui/skill'
     for name in ('workflow.il', 'browser.il', 'gui.il'):
         depth = 0; quoted = False; escaped = False
         for line in (source/name).read_text().splitlines():

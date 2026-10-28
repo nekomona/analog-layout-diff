@@ -7,10 +7,10 @@ import subprocess
 import sys
 import tempfile
 import time
-from layoutdiff.storage import Snapshot, write_records
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.streaming import merge, file_digest
-from layoutdiff.streampatch import create, apply
+from layoutdiff.data.storage import Snapshot, write_records
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.data.streaming import merge, file_digest
+from layoutdiff.data.streampatch import create, apply
 
 
 def check(case, source):

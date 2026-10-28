@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-from layoutdiff.core import diff
-from layoutdiff.storage import from_snapshot
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.streampatch import create, apply
-from layoutdiff.acceleration import info
+from layoutdiff.data.core import diff
+from layoutdiff.data.storage import from_snapshot
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.data.streampatch import create, apply
+from layoutdiff.data.acceleration import info
 
 source = Path(sys.argv[1])
 states = [json.loads((source/f'snapshot{i}.json').read_text()) for i in range(3)]

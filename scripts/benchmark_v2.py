@@ -8,12 +8,12 @@ import statistics
 import subprocess
 import sys
 import time
-from layoutdiff.storage import Snapshot, from_snapshot, strict_json, write_records
-from layoutdiff.changeindex import ChangeIndex
-from layoutdiff.gitcommit import git, prepare_v2, commit
-from layoutdiff.gitstore import snapshot_directory
-from layoutdiff.browser import HistoryBrowser
-from layoutdiff.streaming import read_wire, merge
+from layoutdiff.data.storage import Snapshot, from_snapshot, strict_json, write_records
+from layoutdiff.comparison.changeindex import ChangeIndex
+from layoutdiff.git.commit import git, prepare_v2, commit
+from layoutdiff.git.store import snapshot_directory
+from layoutdiff.ui.browser import HistoryBrowser
+from layoutdiff.data.streaming import read_wire, merge
 
 IDENTITY = ["BENCH", "synthetic", "layout"]
 

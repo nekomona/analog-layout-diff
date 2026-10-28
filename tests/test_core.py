@@ -1,8 +1,8 @@
 import copy
 import random
 import pytest
-from layoutdiff.core import canonicalize, diff, apply_diff, empty_snapshot, digest
-from layoutdiff.sexpr import loads, dumps
+from layoutdiff.data.core import canonicalize, diff, apply_diff, empty_snapshot, digest
+from layoutdiff.virtuoso.sexpr import loads, dumps
 
 
 def test_seeded_histories_and_reverse():

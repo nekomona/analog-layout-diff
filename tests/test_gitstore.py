@@ -1,11 +1,11 @@
 import json
 import random
 import pytest
-from layoutdiff import gitcommit as gc
-from layoutdiff import gitstore as gs
-from layoutdiff.core import canonicalize, empty_snapshot, diff, apply_diff
-from layoutdiff.browser import HistoryBrowser
-from layoutdiff.history import History, atomic_json
+import layoutdiff.git.commit as gc
+import layoutdiff.git.store as gs
+from layoutdiff.data.core import canonicalize, empty_snapshot, diff, apply_diff
+from layoutdiff.ui.browser import HistoryBrowser
+from layoutdiff.data.history import History, atomic_json
 from test_gitcommit import repo, IDENTITY, snapshot
 
 

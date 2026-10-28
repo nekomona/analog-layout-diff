@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 import time
-from layoutdiff.matching import pairs
+from layoutdiff.comparison.matching import pairs
 
 
 def records(count, moved):

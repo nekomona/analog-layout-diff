@@ -1,11 +1,11 @@
 import copy
 import json
 import pytest
-from layoutdiff.core import canonicalize, diff, apply_diff, empty_snapshot
-from layoutdiff.virtuoso import coverage, render, VirtuosoAdapter
-from layoutdiff.support import checked_records, UnsupportedContentError
-from layoutdiff.storage import write_records
-from layoutdiff.review import classify
+from layoutdiff.data.core import canonicalize, diff, apply_diff, empty_snapshot
+from layoutdiff.virtuoso.adapter import coverage, render, VirtuosoAdapter
+from layoutdiff.virtuoso.support import checked_records, UnsupportedContentError
+from layoutdiff.data.storage import write_records
+from layoutdiff.comparison.review import classify
 
 
 def fixture():
@@ -116,8 +116,8 @@ def test_reconstruction_errors_do_not_truncate_after_twelve_objects(tmp_path):
 @pytest.mark.parametrize("categories", [90, 200])
 def test_gui_coverage_report_is_not_truncated_to_six_kilobytes(tmp_path, categories):
     from types import SimpleNamespace
-    from layoutdiff.gui import GuiWorker
-    from layoutdiff.sexpr import dumps as sk
+    from layoutdiff.ui.worker import GuiWorker
+    from layoutdiff.virtuoso.sexpr import dumps as sk
     counts = {f'unsupported category {i:03} with a long diagnostic description': 1 for i in range(categories)}
     report = tmp_path / 'all.jsonl'
     report.write_text('{}\n')

@@ -6,8 +6,8 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from layoutdiff.core import diff, digest, empty_snapshot
-from layoutdiff.history import atomic_json, read_json
+from layoutdiff.data.core import diff, digest, empty_snapshot
+from layoutdiff.data.history import atomic_json, read_json
 from .api import view_api
 from .codec import db, shape_from, transform_from, validate_klayout
 

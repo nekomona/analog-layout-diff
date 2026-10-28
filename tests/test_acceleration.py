@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 import subprocess
 import pytest
-from layoutdiff import acceleration as acc
-from layoutdiff.streaming import merge, wire_row
-from layoutdiff.core import encoded
+import layoutdiff.data.acceleration as acc
+from layoutdiff.data.streaming import merge, wire_row
+from layoutdiff.data.core import encoded
 
 
 def inputs(tmp_path):

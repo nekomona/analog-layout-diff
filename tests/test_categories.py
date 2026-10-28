@@ -1,7 +1,7 @@
 import copy
 import pytest
-from layoutdiff.categories import CategoryDiff, category, snapshot_changes
-from layoutdiff.core import canonicalize, diff
+from layoutdiff.comparison.categories import CategoryDiff, category, snapshot_changes
+from layoutdiff.data.core import canonicalize, diff
 
 
 def rect(x=0, **kwargs):
@@ -71,7 +71,7 @@ def test_100k_initial_elements_reduce_to_one_category():
 
 
 def test_large_route_preview_does_not_iterate_entire_geometry():
-    from layoutdiff.categories import operation_excerpt
+    from layoutdiff.comparison.categories import operation_excerpt
     class BoundedPoints(list):
         def __iter__(self):
             for i in range(100000):

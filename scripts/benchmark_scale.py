@@ -11,11 +11,11 @@ import subprocess
 import sys
 import time
 
-from layoutdiff.core import canonicalize, diff
-from layoutdiff.gitcommit import git, json_bytes, prepare
-from layoutdiff.gittools import textconv
-from layoutdiff.gitstore import snapshot_path
-from layoutdiff.browser import HistoryBrowser
+from layoutdiff.data.core import canonicalize, diff
+from layoutdiff.git.commit import git, json_bytes, prepare
+from layoutdiff.git.tools import textconv
+from layoutdiff.git.store import snapshot_path
+from layoutdiff.ui.browser import HistoryBrowser
 
 IDENTITY = ["BENCH", "synthetic", "layout"]
 
