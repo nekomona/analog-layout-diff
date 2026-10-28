@@ -277,7 +277,7 @@ class VirtuosoAdapter:
                 f'let((tf vd) tf=techGetTechFile(ddGetObj({sk(lib)})) '
                 f'foreach(mapcar name {sk(names)} vd=techFindViaDefByName(tf name) '
                 'list(name when(vd nth(3 vd~>params)) when(vd nth(4 vd~>params)))))')))
-            defaults = {name: {'cutRows': rows, 'cutColumns': columns} for name, rows, columns in values}
+            defaults = {name: {'cutRows': rows, 'cutColumns': columns} for name, rows, columns in values or []}
             cache_aliases = mpp_path_cache_aliases(snapshot, actual) if review_token else []
             expected_comparison, expected_count = via_default_projection(
                 snapshot, defaults, mpp_connectivity=True, mpp_cache_aliases=cache_aliases)
@@ -364,10 +364,23 @@ def render(snapshot, *, review_token=None):
     commands += prop_cmds("cv", meta["props"])
     from layoutdiff.virtuoso.mpp import prepare_replay, figure_expression
     mpp_commands = prepare_replay(records, dim)
+    # ROD connectivity writes can propagate properties to generated members,
+    # including members visited earlier. Restore MPP properties after ordinary
+    # figure connectivity, but before annotations resolve property references.
+    # Restore masters first so their callbacks cannot overwrite member values.
+    mpp_properties = []
+    for key, r in sorted(((k, r) for k, r in snapshot['objects'].items()
+                         if r.get('mpp') or r.get('mppOwner')),
+                         key=lambda item: (not bool(item[1].get('mpp')), item[0])):
+        mpp_properties.append(f'o=figures[{sk(key)}] foreach(prop o~>prop dbDeleteObject(prop))')
+        mpp_properties += prop_cmds('o', r.get('props', []))
     if review_token:
         commands.append(f"ALDGUIBeginReview({sk(review_token)} cv)")
     for key, r in replay_items(snapshot):
         kind = r["kind"]
+        if kind in LINK_FIELDS and mpp_properties:
+            commands += mpp_properties
+            mpp_properties = []
         if kind not in {'net', 'term'} and mpp_commands:
             commands += mpp_commands
             mpp_commands = []
@@ -447,13 +460,12 @@ def render(snapshot, *, review_token=None):
                             f'error("Creation failed: group %s (definition %s)" {sk(r["name"])} {sk(r["defName"])}))')
         else:
             commands.append(f"o={expr} unless(o error(\"Creation failed: {kind}\"))")
-        if has_logical_groups:
+        if has_logical_groups or r.get('mpp') or r.get('mppOwner'):
             commands.append(f"figures[{sk(key)}]=o")
         if review_token:
             commands.append(f"ALDGUIRemember({sk(review_token)} {sk(key)} o)")
-        if r.get('mpp') or r.get('mppOwner'):
-            commands.append('foreach(prop o~>prop dbDeleteObject(prop))')
-        commands += prop_cmds("o", r.get("props", []))
+        if not (r.get('mpp') or r.get('mppOwner')):
+            commands += prop_cmds("o", r.get("props", []))
         if kind in LINK_FIELDS and r.get('parent'):
             commands.append(f"o~>parent={reference('parent')}")
         if kind in {'areaBlockage', 'layerBlockage'}:
@@ -511,6 +523,7 @@ def render(snapshot, *, review_token=None):
             commands.append(f"p=pins[{pin_table_key}] if(p then unless(dbAddFigToPin(p o) error(\"Pin figure attachment failed\")) else p=dbCreatePin(nets[{sk(r['net'])}] o {sk(p['name'])} terms[{sk(p['term'])}]) unless(p error(\"Pin creation failed\")) pins[{pin_table_key}]=p) p~>accessDir={sk(p['accessDir'])} p~>type={sk(p['type'])}")
             commands += prop_cmds("p", p["props"])
             commands.append(f"figures[{sk(pin_key(p['term'], p['name']))}]=p")
+    commands += mpp_properties
     # All members (including nested groups) must exist before attachment. Native
     # ordered groups append members, independent of geometry creation order.
     for key, r in sorted(((k, r) for k, r in snapshot["objects"].items() if r.get("group")),

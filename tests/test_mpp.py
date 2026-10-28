@@ -1,5 +1,6 @@
 import copy
 import json
+import pytest
 from layoutdiff.data.core import canonicalize, diff, apply_diff, encoded
 from layoutdiff.virtuoso.adapter import render
 from layoutdiff.virtuoso.support import coverage
@@ -53,6 +54,38 @@ def test_replay_is_invariant_to_json_and_git_store_record_order(tmp_path):
             assert render(variant)==expected
     finally:
         source.close()
+
+
+@pytest.mark.parametrize('value', [None, 'FALSE', 'TRUE'])
+def test_mpp_sticky_property_restored_after_connectivity_without_losing_other_properties(value):
+    raw = records()
+    raw[2]['props'] = [['lxStickyNet', 'boolean', 'TRUE']]
+    raw[3]['props'] = [['note', 'string', 'keep']]
+    if value is not None:
+        raw[3]['props'].append(['lxStickyNet', 'boolean', value])
+    snapshot = canonicalize(raw)
+    master = next(k for k, r in snapshot['objects'].items() if r.get('mpp'))
+    raw.append(dict(kind='textDisplay', owner=master, associate=master, parent=None,
+                    associateProperty=['lxStickyNet'], assocType='propAssocType',
+                    xy=[0, 2000], height=200, justify='lowerLeft', orient='R0', font='roman',
+                    isDrafted=True, isOverbar=None, isVisible=True, isNameVisible=None,
+                    isValueVisible=True, layerName='text', purpose='drawing', props=[]))
+    snapshot = canonicalize(raw)
+    original = copy.deepcopy(snapshot)
+    code = '\n'.join(render(snapshot))
+    # The final pass must follow *all* net assignments, even assignments on
+    # other figures; native ROD updates can affect previously visited members.
+    tail = code[code.rindex('o~>net='):code.index('o=dbCreateTextDisplay')]
+    assert tail.count('foreach(prop o~>prop dbDeleteObject(prop))') == 2
+    assert tail.index('dbReplaceProp(o "lxStickyNet" "boolean" t)') < tail.index('dbReplaceProp(o "note"')
+    if value is not None:
+        expected = 't' if value == 'TRUE' else 'nil'
+        assert f'dbReplaceProp(o "lxStickyNet" "boolean" {expected})' in tail
+    else:
+        assert tail.count('dbReplaceProp(o "lxStickyNet"') == 1
+    assert 'dbReplaceProp(o "note" "string" "keep")' in tail
+    assert 'dbDeleteObject(prop)' not in code[code.index('o=dbCreateTextDisplay'):]
+    assert snapshot == original
 
 
 def test_unchoppable_master_keeps_nil_and_replays_chopped_subparts():
