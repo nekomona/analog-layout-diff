@@ -27,6 +27,14 @@ Pure codec, Git and KLayout tests run without a live design environment. Native
 tests need a dedicated writable test library and must preserve source views.
 Verify SKILL against the documentation installed with the target Virtuoso version.
 
+Reusable native regression drivers remain under `scripts/`. Create a writable
+`LAYOUT_DIFF_TEST` library attached to a suitable technology before running them.
+For example, `python scripts/regression.py --seeds 2 --steps 3` exercises seeded
+geometry edits, replay and native readback; the hierarchy, group, omission,
+workflow and review drivers exercise their respective features. Technology
+layers and via definitions used by a driver must exist in the test environment.
+Keep design-specific surveys and session replay scripts local.
+
 In restricted Windows environments, point temporary storage into the checkout
 before running the suite:
 
