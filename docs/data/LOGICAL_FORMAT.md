@@ -1,11 +1,10 @@
-# Snapshot and commit format, version 1
+# Logical records and operation-chain format
 
-This remains the expanded logical interchange form and legacy history format.
-Version 0.9 stores GUI snapshots using the implemented [v2 streaming codec](FORMAT_V2.md).
-It preserves these logical records, keys and hashes while changing their disk
-representation. Old v1 snapshots and histories remain readable.
+The expanded interchange schema is `analog-layout-diff/1`. The
+[streaming storage codec](STORAGE_FORMAT.md) stores the same records, keys and
+semantic hashes in a compact directory. Both representations are supported.
 
-The stable interchange form is UTF-8 JSON:
+The interchange form is UTF-8 JSON:
 
 ```json
 {"schema":"analog-layout-diff/1","objects":{}}
@@ -23,32 +22,31 @@ in-memory `db:0x...` addresses do not affect identity. Geometry arrays preserve
 their meaningful order, including polygon point order; geometrically equivalent
 polygon vertex reorderings are reported as content changes.
 
-Version 0.12 adds content-addressed `layerBlockage`, `areaBlockage`,
-`snapBoundary`, `sitePattern` and `textDisplay` records without changing the v1/v2
-containers or existing kinds' identities. Geometric dimensions use integer DBU;
+Content-addressed `layerBlockage`, `areaBlockage`,
+`snapBoundary`, `sitePattern` and `textDisplay` records share these containers
+and canonical identity rules. Geometric dimensions use integer DBU;
 site entries preserve order as `[siteName, [x, y], orientation]`. The full
-[field inventory and native behavior](findings/ANNOTATIONS.md)
+[field inventory and native behavior](../virtuoso/ANNOTATIONS.md)
 is documented separately. Owner, parent and associate links contain canonical
 object keys (or the existing pin/instTerm aliases), never database handles.
 Property links add an ordered `associateProperty`/`ownerProperty` path from that
 object to the property container. Null references differ from absent fields.
-Old releases reject these additional kinds; use 0.12+ to replay such snapshots.
 
-Since 0.9.1, a `pathSeg` with either end style `custom` additionally records
+A `pathSeg` with either end style `custom` additionally records
 `customExtensions`, in this order:
 `[beginLeftDiagExt, beginRightDiagExt, beginRightHalfWidth, endLeftDiagExt,
 endRightDiagExt, endRightHalfWidth]`. The six integer-DBU values come from
 `dbGetPathSegStyle`; together with the existing `beginExt`/`endExt`, they are
 passed back to `dbCreatePathSeg`. Preserve the API's orthogonal/diagonal units;
 do not apply an additional square-root-of-two conversion. Only custom segments
-gain this field, leaving existing ordinary-segment identities unchanged.
+carry this field.
 Fixed truncate/extend/chamfer styles derive their extensions during creation;
 the renderer supplies zero for their optional extension arguments.
 
-Old custom snapshots lacking these dimensions require a fresh capture and are
-still rejected, because inventing the missing dimensions would alter geometry.
-Chamfer ends need no custom dimension field. The v2 codec and C++ backend retain
-the new logical field without a storage-schema change.
+Custom snapshots lacking required dimensions need a fresh capture and are
+rejected, because inventing the missing dimensions would alter geometry.
+Chamfer ends need no custom dimension field. The storage codec and C++ backend
+retain this logical field.
 
 All modeled coordinate and length fields use integer database units. Conversion
 happens in SKILL before printing, avoiding `%L` floating-point rounding of
@@ -73,7 +71,7 @@ among `cv~>instances`; the reader deliberately filters ordinary instances to
 avoid recording arrays twice. Standard vias retain the via definition name and
 typed override values from `viaHeader~>overrideParams`.
 
-Since 0.10.2, native reconstruction validation includes this via equivalence:
+Native reconstruction validation includes this via equivalence:
 an explicit integer `cutRows` or `cutColumns` override equal to the destination
 technology's corresponding `viaDef~>params` default may disappear on readback.
 IC23.1 `dbCreateVia` removes these redundant overrides. Exact comparison runs
@@ -87,36 +85,34 @@ diff/apply. The returned native snapshot retains Virtuoso's actual parameter
 spelling and can therefore have a different raw hash from the committed
 snapshot. The decision and queried defaults are recorded in
 `readback_normalization_<build-id>.json` and the GUI's `review.json`.
-See [the diagnosis and evidence](findings/VIA_DEFAULTS.md).
-Later MPP-specific native comparison rules are summarized in the
-[processing guide](architecture/PROCESSING_PIPELINE.md#native-replay-and-readback)
-and [MPP findings](findings/MPP_AND_MATCHING.md); none changes stored identity
+See [native via comparison](../virtuoso/VIA_DEFAULTS.md).
+MPP-specific native comparison rules are summarized in the
+[processing guide](../architecture/PROCESSING_PIPELINE.md#native-replay-and-readback)
+and [MPP findings](../virtuoso/MPP.md); none changes stored identity
 or generic diff/apply semantics.
 
-Version 0.11.0 adds presentation-only connectivity categories and group boundary
-overlays. It does not change this schema, v2 records, hashes, native capture,
-diff/apply operations or reconstruction. Group-only member edits no longer
-mark figures Modified in review. Net-only changes use Modified net, while mixed
-edits stay Modified. See [GUI semantics](VIRTUOSO_GUI.md#review-controls-in-0110).
+Connectivity categories and group-boundary overlays are presentation data.
+Group-only membership edits do not classify members as Modified. Connectivity-only
+edits use Modified net; movement/size edits use Moved / stretched, while other
+simultaneous edits take precedence as Modified. See
+[comparison semantics](../comparison/README.md#change-classification).
 
 `unsupported` records include a category and diagnostic attributes. They permit
 inspection and offline comparison, but cannot enter a reconstructable history.
 Their references are descriptive hints, not globally unique persistent OA IDs.
 
-Since 0.10.1, routes, markers and Steiners are deliberately outside the capture
+Routes, markers and Steiners are deliberately outside the capture
 scope. They produce no records, group links or omission counts, so changes to
 them alone produce no diff. Physical member geometry and supported connectivity
 remain separate tracked records. Ordered figure-group counts/positions are
 renumbered over retained members. Replay omits the excluded topology and
-annotations. The [design decision and evidence](OA_OBJECT_FINDINGS.md) preserve
-the rationale and known effects. Old diagnostic snapshots are not rewritten;
-recapture them to use the current scope. Generic diff/apply retains its exact
-hash and replay semantics for existing snapshots.
+annotations. The [capture policy](../virtuoso/ROUTING_SCOPE.md)
+defines this boundary. Generic diff/apply preserves the exact data supplied in
+existing snapshots; native replay separately enforces its supported scope.
 
 ## Logical groups
 
-Version 0.10.0 adds the separate OA `group` kind; `figGroup` keeps its existing
-representation. A logical group records `name`, `defName`, `isSet`,
+OA logical `group` records are separate from `figGroup` records. A logical group records `name`, `defName`, `isSet`,
 `isCollection`, `isOrdered`, `isUniqueName`, `deleteWhen`, typed `props`, and
 `members`. Each member is `{"target": "<object key>", "props": []}`; these
 properties belong to the native `groupMem`, not the target object.
@@ -131,7 +127,7 @@ ordered memberships keep their native order. Collection multiplicity is kept.
 The SKILL transport assigns temporary local integers when logical groups or
 supported annotation relationships need them. A disk-backed resolver replaces
 these with canonical keys, resolves nested groups bottom-up and strips all transport IDs. Layouts
-without those relationships retain their previous capture representation. No OA
+without those relationships require no temporary reference IDs. No OA
 handle or capture-local integer becomes a persistent reference.
 
 Replay creates every object and logical group first, then attaches members and
@@ -155,8 +151,7 @@ backend preserve these records without a schema or kernel change.
 
 ## Hierarchical dependencies
 
-`dependency` is additive to schema v1; old snapshots and commit IDs remain
-valid. New captures traverse ordinary instance and mosaic masters recursively,
+`dependency` records use the logical schema. Captures traverse ordinary instance and mosaic masters recursively,
 visiting each in-memory master once to terminate sharing/cycles. The persistent
 record is deduplicated by library/cell/view. PCell submasters are traversed for
 their references but fingerprinted through the persistent supermaster.
@@ -204,8 +199,8 @@ record. Native restore skips these records during construction, compares them
 with live masters, emits warnings, and saves a JSON warning report. It verifies
 all remaining top-level records exactly. The returned snapshot contains current
 dependency fingerprints, so its overall digest may differ from the requested
-historical snapshot while the top-level content matches. Legacy snapshots with
-no dependency records retain their previous equality behavior.
+requested snapshot while top-level content matches. Snapshots without
+dependency records have no archived hierarchy hints to compare.
 
 Offline replay preserves the recorded hints exactly, without accessing Cadence.
 `replay --check-dependencies` adds a live, nonblocking check. `restore` checks
@@ -217,35 +212,19 @@ external PCell SKILL files, CDF callbacks, plugins, or runtime configuration.
 Capture and fingerprinting are sequential reads, not a distributed transaction;
 avoid concurrent edits when establishing a reproducible baseline.
 
-## Legacy Git snapshot storage (GUI versions 0.7–0.8)
-
-The GUI stores canonical snapshots directly in the Git tree at
-`layouts/<library>/<cell>/<view>.layout.json`; components use reversible UTF-8
-percent encoding where needed. Git owns commit IDs, parents and metadata.
-The schema and canonical JSON rules above are unchanged. Operations are derived
-from pairs of Git snapshots for previews, counts, review and exported patches.
-Starting from empty and applying these derived operations is regression-tested
-to reproduce every recorded snapshot. Native review can read one snapshot
-directly without replaying its ancestors.
-
-Legacy Git commits containing `latest.layout.json` remain readable from their
-Git blobs. Adopting the new path preserves those files and all existing Git
-history. Standalone operation chains below remain a separate, optional CLI
-format; new GUI commits do not create or advance them. See [GIT.md](GIT.md).
-
-## Ordered figure groups (0.9.2)
+## Ordered figure groups
 
 Ordinary `figGroup` records retain `ordered`, `origin`, `orient`, `type`, and
 properties. An ordered group also carries integer `memberCount`. Each member
 carries its parent name in `group` and its zero-based position in `groupOrder`.
 This includes shapes, instances, vias, simple mosaics, and nested figure groups.
 Empty ordered groups have `memberCount: 0`. Unordered memberships omit
-`groupOrder`; old ordinary unordered records keep their identities.
+`groupOrder`.
 
 The reader indexes each native group's `figs` list once. Replay creates every
 object before attaching members in the recorded order. Complete contiguous,
 unique membership is validated using a temporary disk-backed SQLite index.
-Missing order/count data in old ordered captures requires recapture. Reordering
+Missing required order/count data requires recapture. Reordering
 is part of the logical diff and is shown as a property modification in review.
 Neither the v1/v2 storage schema nor the C++ kernels require a format change.
 
@@ -278,8 +257,8 @@ linear sequence only. It is not intended for concurrent network-filesystem write
 ## Other OpenAccess readers
 
 Implement `SnapshotReader.capture(library, cell, view)` from
-`layoutdiff.backends`. Convert backend values to these records and call
-`layoutdiff.core.canonicalize(records)`. The result can enter the same diff,
+`layoutdiff.data.backends`. Convert backend values to these records and call
+`layoutdiff.data.core.canonicalize(records)`. The result can enter the same diff,
 history and verification pipeline. `JsonReader` consumes such snapshots from an
 external extractor, and the CLI `commit` command uses this interchange boundary.
 

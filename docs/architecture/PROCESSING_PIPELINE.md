@@ -1,8 +1,8 @@
 # Layout processing: capture, diff, replay and review
 
-This summarizes the verified processing design through 0.15.2. The [data model](LAYOUT_DATA_MODEL.md)
-defines the information boundary; [format specifications](../FORMAT_V2.md)
-define exact serialization. Native measurements below are IC23.1 observations.
+This guide describes the current processing pipeline. The [data model](../data/MODEL.md)
+defines the information boundary; [format specifications](../data/STORAGE_FORMAT.md)
+define exact serialization. Native API details refer to Virtuoso IC23.1.
 For process boundaries, module blocks and GUI interaction sequences, see
 [Program structure](PROGRAM_STRUCTURE.md).
 
@@ -50,7 +50,7 @@ Branch creation and automatic merging are outside the primary workflow.
 Save & Commit explicitly saves the working layout first. Its preview includes
 counts and categories; Enter/OK commits after stale-preview checks. Cancel leaves
 the layout saved. Unknown-content consent does not bypass validation or create
-missing data. [The GUI guide](../VIRTUOSO_GUI.md#committing-with-unsupported-elements-0140)
+missing data. [The GUI guide](../ui/README.md#unsupported-elements-and-omission-audits)
 documents the dialogs.
 
 ## Streaming storage and validation
@@ -151,7 +151,7 @@ A held review can receive deferred ROD updates after its initial save. The
 adapter checks the destination identity, settles only that generated cell, then
 validates full readback before opening it read-only. The disposable review may
 persist the effective recipe name; the committed original recipe is retained.
-[MPP findings](../findings/MPP_AND_MATCHING.md) record the observed cache behavior.
+[MPP findings](../virtuoso/MPP.md) record the observed cache behavior.
 
 ## Review, restore and runtime ownership
 
@@ -169,10 +169,8 @@ SKILL launches the supervisor/worker in the background on the Virtuoso host.
 CIW, Library Manager and layout toolbars provide controls. Session scratch,
 review libraries and text viewers are reference-tracked under system temp and
 reclaimed after their final window closes; cleanup survives worker Stop.
-The supervisor watches Virtuoso process identity and IPC lifetime. Full actual
-designer-process exit remains an explicitly unclaimed test boundary.
-Only quick-commit preparation/committing uses a loading popup; other actions
-publish inline status. [GUI ownership details](../VIRTUOSO_GUI.md#ownership-and-shutdown)
+The supervisor watches Virtuoso process identity and IPC lifetime. Only quick-commit preparation/committing uses a loading popup; other actions
+publish inline status. [GUI ownership details](../runtime/README.md#ownership-and-shutdown)
 describe the runtime contract.
 
 ## Scaling and backend selection
@@ -186,15 +184,15 @@ OA capture/reconstruction and publication.
 
 Use synthetic workloads to measure validation, merge, matching, Git and native
 review separately. Scratch snapshots, wire streams, patches and indexes can
-coexist. See [performance methodology](../BACKEND_SCALE_RESULTS.md) for scope.
+coexist. See [performance methodology](../data/PERFORMANCE.md) for scope.
 
 ## Verification and implementation map
 
 Verification combines exact forward/reverse replay, randomized transitions,
 Python/C++ byte parity, native save/readback, actual GUI requests, cleanup checks,
 source/Git invariance and independent exported GDS XOR/labels. GDS cannot verify
-connectivity or editing semantics. The [verification index](../VERIFICATION.md)
-links each experiment to its driver and records remaining limits.
+connectivity or editing semantics. The [verification index](../development/VERIFICATION.md)
+describes the checks for each component and their limits.
 
 | Responsibility | Source |
 | --- | --- |

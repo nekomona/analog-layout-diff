@@ -32,19 +32,8 @@ no pins/terminals, compatible real nets and otherwise exact recipes. Ambiguous
 or live-net changes fail. Accepted aliases are logged; Git keeps captured data.
 Only generated review cells may be saved to settle deferred ROD callbacks.
 
-Historical flattened snapshots remain flattened; replay does not invent a
-recipe from a current PDK or live source.
+Snapshots without MPP recipes reconstruct flattened geometry. Replay cannot
+infer a recipe from a PDK or a live source.
 
-## Via position matching
 
-Exact keys hash full records, so moved anonymous figures produce delete/add.
-Presentation derives conservative correspondence without changing patch identity.
-It uses MPP names, identical geometry, unique/common translations and reciprocal
-geometric candidates. Ambiguity remains add/delete.
-
-Vias have origins and parameter overrides without a saved footprint. The point
-pass groups compatible definition/purpose/net and nondimensional overrides,
-prefers identical geometry, then considers size/orientation edits. Reciprocal
-nearest choices require a sufficiently separated runner-up; ties are refused.
-Large groups use bounded spatial queries. Both review implementations share
-this matcher. Synthetic fixtures exercise movement, resizing and rotation.
+See [comparison and matching](../comparison/README.md) for presentation pairing.

@@ -1,7 +1,6 @@
 # Optional C++ performance backend
 
-This is a separate, dependency-free C++17 project. It was added after the
-Python v2 implementation passed its 81-test validation gate. Python is the
+This is a separate, dependency-free C++17 project. Python is the
 golden reference: `layoutdiff/data/core.py`, `data/storage.py`, `data/streaming.py` and
 `data/streampatch.py` define semantics, validate storage and verify replay results.
 
@@ -22,8 +21,7 @@ python -m layoutdiff backend-info
 
 `build.py` writes the executable and adjacent `.json` provenance file. Both
 are needed by Python dispatch. On Windows use `venv/Scripts/layoutdiff-native.exe`
-and a compatible compiler. Only the Linux g++ 11.5 build has been verified live.
-`CMakeLists.txt` supports standalone builds; use `build.py` for an integrated
+and a compatible compiler. `CMakeLists.txt` supports standalone builds; use `build.py` for an integrated
 installation with provenance metadata.
 
 `scripts/install_runtime.py` bundles these sources, builds on the Virtuoso host
@@ -75,4 +73,4 @@ output atomically. The raw executable's path guard is only lexical.
 Compare native operation streams and forward/reverse application with Python
 using synthetic records, including typed numbers, Unicode, duplicates, automatic
 selection, missing-tool fallback and failed publication. Native and Python bytes
-must agree before automatic selection. See [performance methodology](BACKEND_SCALE_RESULTS.md).
+must agree before automatic selection. See [performance methodology](../data/PERFORMANCE.md).

@@ -1,6 +1,6 @@
-# Streaming snapshot format, version 2
+# Streaming snapshot storage
 
-Version 0.9 implements the approved storage redesign. Python `data/storage.py` is
+The current storage schema is `analog-layout-diff/2`, codec 1. `data/storage.py` is
 the codec authority; `data/core.py` defines the expanded v1 semantics and object
 identity. C++ does not reinterpret layout fields or numbers.
 
@@ -13,7 +13,7 @@ layouts/<library>/<cell>/<view>.layout/
   definitions.jsonl
 ```
 
-The path components retain the reversible percent encoding used by v1.
+Path components use reversible UTF-8 percent encoding.
 All three files exist, including an empty `definitions.jsonl`. Git is the only
 history authority. SQLite indexes, expanded wire streams and temporary patches
 are disposable files outside this tree, with no alternate HEAD or commit graph.
@@ -24,7 +24,7 @@ their SHA-256 digests. `semanticSha256` hashes the fully expanded canonical v1
 snapshot. Thus v1 and v2 representations of the same state have the same logical
 hash; the representation change does not alter anonymous keys.
 
-### Optional omission audit (tool 0.14.0)
+### Optional omission audit
 
 An explicitly confirmed incomplete checkpoint adds `omissions.json` and
 `omissions.jsonl` beside the three mandatory files. They are not snapshot objects
@@ -71,8 +71,9 @@ Their key is `kind:name`. Other kinds use `kind:SHA256(expanded record):occurren
 Identical figures retain contiguous occurrence numbers starting at zero, sorted
 lexically in the file (so `:10` precedes `:2`). Ordered geometry arrays are never
 reordered. Moving anonymous geometry is still delete/add; moving a named
-instance is modification. As of 0.15.0, the GUI pairs equal-geometry attribute
-edits and confidently matched moves/stretches as modifications. This derived
+instance is modification. The GUI pairs equal-geometry attribute edits and confidently matched moves
+and stretches for presentation. It classifies movement/size-only edits separately
+from ordinary modifications. This derived
 pairing does not change stored identity or exact forward/reverse patches.
 
 ## Explicit default presence
@@ -151,16 +152,16 @@ changes. Cancel does not migrate. Old revisions are preserved. An explicit
 `migrate-v2` command does the same without a new native capture. Conflicting
 coexisting v1/v2 data and incomplete v2 directories fail validation.
 
-Legacy embedded histories remain archived. The old dictionary API stays usable;
-after migration it continues writing v2. Reading old v1 JSON still materializes
-it in memory. Git attributes disable automatic text merging for managed files.
+Embedded operation-chain histories are read as archives. The dictionary API
+uses v2 after storage adoption. Reading v1 JSON materializes it in memory.
+Git attributes disable automatic text merging for managed files.
 Hooks, signing, stale-preview/HEAD checks and index isolation remain active.
 
 ## CLI examples
 
-The 0.10.0 logical `group` records use the same codec and object-key rules.
+Logical `group` records use the same codec and object-key rules.
 Capture resolves their temporary native references with a disk-backed pass
-before encoding. See [logical groups](FORMAT.md#logical-groups) for member
+before encoding. See [logical groups](LOGICAL_FORMAT.md#logical-groups) for member
 links, duplicate names and explicitly rejected ambiguous references. No v2
 schema or C++ protocol change is required.
 

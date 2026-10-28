@@ -9,11 +9,11 @@ uv pip install --python .venv/Scripts/python.exe -e ".[verify]"
 
 Linux uses `.venv/bin/python`. Activate the environment before running examples.
 Native operations additionally require Virtuoso Bridge, Virtuoso, and accessible
-technology and masters. See the [GUI guide](VIRTUOSO_GUI.md).
+technology and masters. See the [GUI guide](../ui/README.md).
 
 ## Source and testing
 
-The [program map](architecture/PROGRAM_STRUCTURE.md) describes the packages.
+The [program map](../architecture/PROGRAM_STRUCTURE.md) describes the packages.
 Use canonical imports such as `layoutdiff.data.core` and `layoutdiff.git.commit`.
 Package imports must not start processes or connect to a live database.
 
@@ -52,8 +52,9 @@ to remove generated evidence, caches and temporary repositories. Cleanup preserv
 
 ## Documentation maintenance
 
-Keep user-facing behavior in operating guides, serialization in the format
-specifications, and implementation structure in `architecture/`. Findings should
+Organize reference material under the owning package: `data/`, `comparison/`,
+`virtuoso/`, `git/`, `ui/`, and `runtime/`. Use `architecture/` for flows spanning
+packages, and separate directories for the optional C++ and KLayout components. Findings should
 describe reusable API behavior without source-design names, PDK recipes, private
 paths, session IDs, checkpoint IDs, dates, or measured production-layout data.
 Use synthetic examples and relative Markdown links. Run link and publication
@@ -66,9 +67,14 @@ Store local-only instructions, session reports and migration backups beneath
 it. Keep `.env` local. Never force-add private material. A committed deletion does
 not remove earlier copies: inspect every branch and tag before publication.
 
-## Releases
+## Current-release documentation
 
-Update `pyproject.toml` and the behavior-focused [changelog](CHANGELOG.md), run
-relevant checks, and tag the validated revision. Source history and layout
-snapshot repositories are separate; source maintenance must not touch a
-designer's runtime or design repository.
+`pyproject.toml` identifies the current release. Keep the documentation index
+aligned with it and describe the current implementation in the present tense.
+Remove release timelines, superseded instructions and unimplemented proposals.
+Document supported formats and compatibility behavior as current capabilities;
+schema versions identify data contracts, independently of application releases.
+Run the relevant checks before tagging a validated source revision.
+
+Source history and layout snapshot repositories are separate. Source maintenance
+must not modify a designer's runtime or design repository.

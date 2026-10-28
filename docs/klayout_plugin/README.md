@@ -12,7 +12,7 @@ Gray is unchanged content, orange is changed content, green is added content,
 and red hollow ghosts show removed objects **and old changed positions**.
 This example is synthetic geometry, not a PDK-verified circuit.
 
-## Run in the existing project environment
+## Command-line use
 
 Start in `/path/to/analog-layout-diff`:
 
@@ -68,8 +68,7 @@ The original layer map is also in `review.json`. The generated review is marked
 with the layout property `layoutdiff.review` so the GUI refuses to commit it as
 a source design.
 
-The root venv already contains Python 3.12, KLayout 0.30.12, Pillow and pytest.
-For another environment, use `uv venv` and `uv pip install --python <venv-python>
+For headless rendering and tests, use `uv venv` and `uv pip install --python <venv-python>
 klayout pillow pytest`; never install globally. Run from the directory containing
 both `layoutdiff/` and `klayout_plugin/`. This isolated folder is deliberately not
 added to the parent packaging configuration.
@@ -110,13 +109,10 @@ local view preferences only. The source view's geometry, colors and editor
 state are not changed. Database capture rejects recursive hierarchy and shapes
 outside the supported subset rather than emitting a partial snapshot.
 
-**GUI validation limit:** no desktop KLayout executable or embedded Qt `pya`
-runtime was found on this machine. Menu insertion, dialogs, file choosers and
-tab switching have been checked against the official API and syntax-checked,
-but have **not** been exercised in desktop KLayout. Database input,
-reconstruction, classification, layer configuration, `.lyp` export, and image
-rendering were exercised using the real installed KLayout database/view APIs.
-See [VERIFICATION.md](VERIFICATION.md) for the remaining manual GUI checklist.
+Desktop integration requires separate verification of menu insertion, dialogs,
+file choosers and tab switching with embedded `pya`. Database/view API tests alone
+do not establish interactive GUI behavior. See
+[verification methodology](../development/VERIFICATION.md).
 
 ## Classification and style
 
@@ -144,7 +140,7 @@ change can be recorded/replayed, but requires explicit normalization before
 visual comparison. The default 250,000-object occurrence budget fails early
 for very large hierarchies/arrays; override it with CLI `--limit` if needed.
 
-Copy [style.example.json](../klayout_plugin/style.example.json), then pass `--style custom.json`
+Copy [style.example.json](../../klayout_plugin/style.example.json), then pass `--style custom.json`
 to `review` or the image helper. The GUI's **Load review colors and styles**
 action loads the same file for subsequent reviews. Partial overrides are valid:
 
@@ -193,4 +189,4 @@ an exact archive of stream syntax or unmodeled database state.
 ```
 
 The demo uses synthetic geometry. Verify snapshot equality, exported geometry
-and deterministic rendering separately; see [verification](VERIFICATION.md).
+and deterministic rendering separately; see [verification](../development/VERIFICATION.md).

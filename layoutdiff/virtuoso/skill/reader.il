@@ -113,7 +113,7 @@ procedure(ALDRead(lib cell view path)
         when(rod~>subParts
           mppMasters[rod~>dbId]=rod
           foreach(fig rod~>subShapes mppOwners[fig]=rod~>name)))
-      ; User-approved capture scope (docs/OA_OBJECT_FINDINGS.md): omit these
+      ; Capture policy (docs/virtuoso/ROUTING_SCOPE.md): omit these
       ; objects and their group links, but retain member shapes/vias and nets.
       ; Key by actual collection membership so Steiner variants are covered.
       ignored=makeTable('aldIgnored nil)

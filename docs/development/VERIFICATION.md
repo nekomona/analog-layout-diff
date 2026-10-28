@@ -14,10 +14,10 @@ connectivity, groups, constraints, or ROD editability.
 
 Compare Python and C++ results byte-for-byte when changing the optional backend.
 Measure validation, matching, Git work, capture and native replay separately;
-see [performance methodology](BACKEND_SCALE_RESULTS.md).
+see [performance methodology](../data/PERFORMANCE.md).
 
-Coverage remains bounded by [supported categories](CATEGORIES.md), external
+Coverage remains bounded by [supported categories](../virtuoso/COVERAGE.md), external
 technology/master definitions and the target Virtuoso version. See the
-[CLI assessment](verification/CLI_AND_PRESERVATION.md) for unsupported-data limits.
+[CLI assessment](../ui/CLI.md) for unsupported-data limits.
 Local execution logs, installation snapshots and design measurements belong in
 ignored local storage and do not form part of the public documentation.

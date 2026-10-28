@@ -20,5 +20,5 @@ whole-workflow speed from a merge-kernel measurement.
 Scratch snapshots, indexes, wire streams and patches can coexist. Large records,
 hierarchy fingerprints and materialized native review have separate resource
 costs. No fixed benchmark time is a guarantee for an arbitrary layout.
-See [backend selection](NATIVE_BACKEND.md) and the
-[pipeline](architecture/PROCESSING_PIPELINE.md#scaling-and-backend-selection).
+See [backend selection](../native-performance/README.md) and the
+[pipeline](../architecture/PROCESSING_PIPELINE.md#scaling-and-backend-selection).

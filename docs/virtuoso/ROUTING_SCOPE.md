@@ -1,6 +1,6 @@
 # Routing scope
 
-## Approved design decision: exclude routes, markers and Steiners
+## Capture policy
 
 Routes, markers and Steiners can persist in OA and carry topology, connectivity,
 routing or verification state. GDS does not certify those semantics. The codec

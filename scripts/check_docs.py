@@ -32,7 +32,8 @@ def anchors(value):
     found.update(re.findall(r'<a\s+(?:name|id)=[\'"]([^\'"]+)',value))
     return found
 
-files=[root/'README.md',root/'klayout_plugin/README.md',*sorted(docs.rglob('*.md'))]
+files=[root/'README.md',root/'klayout_plugin/README.md',root/'native-performance/README.md',
+       root/'tests/fixtures/README.md',*sorted(docs.rglob('*.md'))]
 errors=[];checked=0
 for path in files:
     for match in re.finditer(r'\]\(([^)\n]+)\)',unfenced(text(path))):

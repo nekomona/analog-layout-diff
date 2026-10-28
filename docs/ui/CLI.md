@@ -1,7 +1,7 @@
 # CLI independence and unsupported-content preservation
 
-Capability assessment for **0.17.1**. This is a capability assessment;
-the native capture policy and storage format are unchanged.
+The CLI exposes file-only operations and direct native adapter calls. Its
+dependencies and preservation limits are described below.
 
 ## CLI dependency boundary
 
@@ -50,8 +50,7 @@ File-only diff/apply reconstructs serialized data, not a native OA cellview.
 
 The omission report contains each original normalized record, its canonical
 key, rejection reasons and action. It is committed alongside the layout, with
-hashes binding the report, full capture and supported snapshot. Thus existing
-incomplete commits already carry useful evidence for later support work.
+hashes binding the report, full capture and supported snapshot. The audit stays bound to the checkpoint for inspection.
 
 However, this is **not a lossless future restoration guarantee**:
 
@@ -64,7 +63,7 @@ However, this is **not a lossless future restoration guarantee**:
 - Omission files are outside the core snapshot's semantic hash and patch model.
   Their own audit hashes preserve integrity, but `GitSnapshots.snapshot()` and
   ordinary encode/decode of the resulting snapshot do not carry the audit
-  sidecars. The CLI `git-extract` currently handles a legacy v1 JSON blob only,
+  sidecars. The CLI `git-extract` currently handles a v1 JSON blob only,
   not a v2 directory bundle. Archive the entire committed layout directory
   when retaining this evidence.
 - Later complete commits remove omission files from their current tree; older
@@ -78,27 +77,6 @@ group memberships. Their ordinary member shapes/vias and supported connectivity
 are still tracked. They are not candidates for an unsupported-object archive.
 The exclusion decision precedes native capture; the generic JSON codec itself
 does not reinterpret or filter manually supplied records.
-
-Any future archival design should keep three distinct policies: supported
-objects are replayed, unsupported objects are archived but not yet replayed,
-and explicitly ignored objects remain excluded.
-
-## Proposed extension, not implemented
-
-Use a versioned, data-only opaque-object archive for unsupported nonignored
-content. Preserve typed attribute values with units, stable capture-local
-object references, relationships to supported records, producer/Cadence/PDK
-version metadata, and explicit completeness/missing-field indicators. Bind the
-archive to the layout checkpoint and carry it through Git export, standalone
-codec operations and patch replay. Future support should migrate records
-explicitly and validate native readback; old opaque data must never execute as
-SKILL. Keep the existing double confirmation wherever native rollback still
-loses unsupported objects.
-
-An OA binary backup could provide an additional native recovery path, but it
-would have separate technology/hierarchy dependencies and could contain
-explicitly ignored objects. It is not an implementation of the requested
-exclusion policy and is not proposed as this text snapshot's payload.
 
 ## Verification and limits
 

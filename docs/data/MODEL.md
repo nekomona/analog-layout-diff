@@ -1,9 +1,8 @@
 # Layout data model and scope
 
-Verified design baseline: 0.15.2 with Virtuoso IC23.1. This guide
-summarizes the design decisions; [v1 logical records](../FORMAT.md) and the
-[v2 storage codec](../FORMAT_V2.md) define the serialization contract.
-[Program structure](PROGRAM_STRUCTURE.md) maps these representations to the
+This guide describes the current data model; [v1 logical records](LOGICAL_FORMAT.md) and the
+[v2 storage codec](STORAGE_FORMAT.md) define the serialization contract.
+[Program structure](../architecture/PROGRAM_STRUCTURE.md) maps these representations to the
 runtime processes, source modules and their interfaces.
 
 ## Three representations of one layout
@@ -38,8 +37,8 @@ without pretending to have the source name or native handles.
 | ROD multipart paths | `mpp` recipe on the master path; `mppOwner` on generated figures | Recipe and exact generated geometry both matter; no separate OA MPP collection |
 | Hierarchy hints | One `dependency` per descendant library/cell/view | Fingerprints and dirty hints, without archiving child contents |
 
-The [category survey](../CATEGORIES.md) lists supported fields and remaining
-coverage. Detailed native findings live under [findings/](../OA_OBJECT_FINDINGS.md).
+The [category survey](../virtuoso/COVERAGE.md) lists supported fields and remaining
+coverage. The [Virtuoso guide](../virtuoso/README.md) covers native API behavior.
 
 ## Coordinates, values and properties
 
@@ -97,9 +96,9 @@ does not require a nonexistent OA net; an actual figure connection does.
 
 MPP omission is atomic. Unsupported alignment, custom handles, subpart pins or
 terminals, custom subpart names or an unsupported member can remove the entire
-MPP from a user-confirmed incomplete checkpoint. Historical snapshots without
-recipes stay flattened; missing historical editing semantics are not invented.
-See [MPP findings](../findings/MPP_AND_MATCHING.md).
+MPP from a user-confirmed incomplete checkpoint. A snapshot without recipes reconstructs flattened geometry; missing editing
+semantics cannot be inferred.
+See [MPP findings](../virtuoso/MPP.md).
 
 ## Capture scope and external dependencies
 
@@ -107,7 +106,7 @@ Routes, markers and Steiners are deliberately excluded, including links from
 retained groups to those objects. Their independently stored member metal/vias
 and supported connectivity remain captured. These categories can persist in OA;
 the exclusion is a scope decision, not evidence that they are all temporary.
-See [the routing investigation](../findings/ROUTING_SCOPE.md).
+See [the routing investigation](../virtuoso/ROUTING_SCOPE.md).
 
 Descendant hints deduplicate persistent masters, hash saved OA files, and retain
 dirty/time fallback information. PCell submasters are traversed but fingerprinted
@@ -120,7 +119,7 @@ There is also an explicit incomplete-checkpoint path for unknown content:
 complete-scan diagnostics, two user confirmations, dependency-aware projection,
 then strict validation of the retained graph. Optional omission audits record
 what was lost. Approved scope exclusions produce no omission records. See
-[capture and omission processing](PROCESSING_PIPELINE.md#capture-and-coverage).
+[capture and omission processing](../architecture/PROCESSING_PIPELINE.md#capture-and-coverage).
 
 ## Git-compatible storage
 
@@ -152,7 +151,7 @@ documents attribute omissions and is not a lossless OA fallback.
 
 An independent OA reader may emit these logical records if it implements the
 same type, identity and relationship rules. A general Python OA implementation
-has not been certified. The [KLayout adapter](../KLAYOUT.md#snapshot-boundary-and-limitations)
+has not been certified. The [KLayout adapter](../klayout_plugin/README.md#snapshot-boundary-and-limitations)
 uses a separate `klayout-static/1` marker and bundles reachable static cells.
 Its evaluated geometry snapshots are rejected by the Virtuoso reconstruction
 adapter; they do not supply native PCell or connectivity semantics.

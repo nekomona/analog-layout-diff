@@ -1,9 +1,9 @@
 # Program structure and component interactions
 
-The implementation is organized into functional submodules in **0.17.0**.
+The implementation is organized into six functional packages.
 The overview diagram uses package boundaries; detailed sequences are linked
 separately to keep the main architecture readable. For record fields and algorithms, use the
-[data model](LAYOUT_DATA_MODEL.md) and [processing pipeline](PROCESSING_PIPELINE.md).
+[data model](../data/MODEL.md) and [processing pipeline](PROCESSING_PIPELINE.md).
 
 The block diagrams use the same visual legend throughout:
 
@@ -204,7 +204,7 @@ not imply that native database operations run concurrently in multiple threads.
 ## Save and commit interaction
 
 Save in Virtuoso, capture and preview through `ui`, confirm, revalidate and commit
-through `git`. [The detailed sequence](INTERACTION_SEQUENCES.md#save-and-commit-interaction)
+through `git`. [The detailed sequence](../ui/INTERACTION_SEQUENCES.md#save-and-commit-interaction)
 includes the optional two-step omission consent and one-use tokens.
 
 ## Review and restore interaction
@@ -212,7 +212,7 @@ includes the optional two-step omission consent and one-use tokens.
 Read selected states through `git`, classify through `comparison`, reconstruct
 and verify through `virtuoso`, then open the `ui` overlays. `runtime` retains
 the session resources until their native leases end. See the
-[review/restore sequence](INTERACTION_SEQUENCES.md#review-and-restore-interaction).
+[review/restore sequence](../ui/INTERACTION_SEQUENCES.md#review-and-restore-interaction).
 
 ## Durable state, temporary state and cleanup
 
@@ -223,7 +223,7 @@ the session resources until their native leases end. See the
 | Runtime app and `state/ciw-<pid>/` | Installer, supervisor and worker | App files, repository choice, styles/backend preferences, status/logs, request audits and ownership locks |
 | System temp `ald-session-*/work/<token>/` | Worker plus native lease callbacks | Replay code, captures, exports, diagnostics, temporary review OA and restore backup bundles |
 | SQLite/wire/comparison caches | Snapshot/browser/index owners | Derived files closed with their owning objects; no commit authority |
-| Pre-Git local histories | Compatibility reader | Archived GUI inputs; never appended by current GUI commits |
+| Standalone operation-chain archives | Compatibility reader | Read-only GUI inputs; GUI commits write Git snapshots |
 
 `runtime/workspace.py` allocates token-owned work bundles. `ui/skill/workflow.il` tracks native
 references, seals a completed bundle and writes its release marker only when
@@ -235,8 +235,8 @@ mistaking a reused PID for its original parent.
 
 This division lets a review remain visible after worker Stop while retaining
 the files it still needs. It also prevents filesystem cleanup from guessing
-whether an OA cellview is still referenced. The [runtime guide](../VIRTUOSO_GUI.md#ownership-and-shutdown)
-documents controls and the [verification index](../VERIFICATION.md) records the
+whether an OA cellview is still referenced. The [runtime guide](../runtime/README.md#ownership-and-shutdown)
+documents controls and the [verification index](../development/VERIFICATION.md) records the
 tested lifecycle boundaries.
 
 ## Separate KLayout frontend
@@ -270,7 +270,7 @@ view API. This frontend uses its documented standalone history flow, not the
 Virtuoso `GuiWorker`/bridge/runtime. Its static snapshot marker keeps it distinct
 from native OA snapshots even though it reuses canonical core/history helpers.
 It cannot recover native PCell generators or OA connectivity from GDS. See
-[KLayout architecture and limits](../KLAYOUT.md#snapshot-boundary-and-limitations).
+[KLayout architecture and limits](../klayout_plugin/README.md#snapshot-boundary-and-limitations).
 
 [virtuoso/geometry.py](../../layoutdiff/virtuoso/geometry.py) uses KLayout separately as an
 independent verifier of Virtuoso GDS exports. This verification path does not
@@ -288,16 +288,26 @@ OA reader can implement the [SnapshotReader contract](../../layoutdiff/data/back
 and emit the documented logical model; no general-purpose direct OA binding is
 currently shipped by this project.
 
-## Import and entry-point migration
+## Public entry points
 
-Internal imports now name their owning package, for example
-`layoutdiff.data.core`, `layoutdiff.git.commit`, `layoutdiff.ui.worker` and
-`layoutdiff.virtuoso.adapter`. Source scripts, tests, KLayout integration and
-deployment/checksum paths use these canonical locations. Code that imported
-old internal flat modules must use the new paths listed in the source tree.
+Use package-qualified internal imports such as `layoutdiff.data.core`,
+`layoutdiff.git.commit`, `layoutdiff.ui.worker` and `layoutdiff.virtuoso.adapter`.
+The public `layoutdiff` diff/apply helpers, `layout-diff`, `python -m layoutdiff`,
+`python -m layoutdiff.runtime`, and `layoutdiff.virtuoso` adapter exports are
+available. Root CLI/textconv facades delegate to their owning packages.
 
-Public `layoutdiff` diff/apply helpers, `layout-diff`, `python -m layoutdiff`,
-`python -m layoutdiff.runtime`, and the `layoutdiff.virtuoso` adapter exports
-remain available. The small root CLI/textconv files are compatibility entry
-points, not duplicate implementations. Snapshot schemas, hashes, Git storage
-and the Python/C++ wire contract are unchanged by this move.
+## Documentation by component
+
+| Component | Documentation |
+| --- | --- |
+| `data` | [Data model, formats, streams and acceleration](../data/README.md) |
+| `comparison` | [Matching, classification, groups and paging](../comparison/README.md) |
+| `virtuoso` | [Capture, coverage and native replay](../virtuoso/README.md) |
+| `git` | [Snapshot history and commit transactions](../git/README.md) |
+| `ui` | [CLI, toolbar, browser, review and restore](../ui/README.md) |
+| `runtime` | [Deployment, process ownership and cleanup](../runtime/README.md) |
+| Optional C++ component | [Native performance backend](../native-performance/README.md) |
+| Separate KLayout frontend | [Static-layout tools](../klayout_plugin/README.md) |
+
+Cross-component flows live in [the processing guide](PROCESSING_PIPELINE.md) and
+[UI interaction sequences](../ui/INTERACTION_SEQUENCES.md).

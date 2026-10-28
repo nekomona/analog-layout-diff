@@ -18,4 +18,4 @@ actual ownership after creation. Text displays may have zero height.
 Cross-cellview associates, override masks, missing or ambiguous targets and
 cycles remain coverage errors. Native mask colors require compatible technology.
 GDS XOR cannot verify these constraints or relationships. See
-[category coverage](../CATEGORIES.md).
+[category coverage](COVERAGE.md).

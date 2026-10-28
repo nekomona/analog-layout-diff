@@ -117,7 +117,7 @@ def main(argv=None):
         from layoutdiff.virtuoso.adapter import checked
         client = VirtuosoClient.from_env()
         if checked(client.execute_skill("boundp('ALDRuntimeMenu)")) != "t":
-            raise ValueError("Load the installed startup.il in Virtuoso CIW first; see docs/VIRTUOSO_GUI.md")
+            raise ValueError("Load the installed startup.il in Virtuoso CIW first; see docs/runtime/README.md")
         expression = {"gui-serve": "ALDRuntimeStart()", "gui-stop": "ALDRuntimeStop()",
                       "gui-clean": 'ALDGUIEnqueue(list("cleanup"))'}[args.command]
         checked(client.execute_skill(expression))
