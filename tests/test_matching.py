@@ -109,7 +109,7 @@ def test_via_duplicate_multiplicity_and_input_order(tmp_path):
     assert sorted(pairs(a,b))==sorted(pairs(reversed(a),reversed(b)))
 
 
-def test_reported_eleven_via_pairs_survive_translation_size_and_rotation(tmp_path):
+def test_synthetic_via_pairs_survive_translation_size_and_rotation(tmp_path):
     import json
     from pathlib import Path
     fixture=json.loads((Path(__file__).parent/'fixtures/moved_vias.json').read_text())
