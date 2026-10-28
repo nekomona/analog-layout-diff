@@ -22,7 +22,7 @@ def test_git_browser_metadata_files_counts_and_readonly(tmp_path):
     assert rows[0][0] == b["git_commit"][:10]
     assert rows[0][2] == "Browser Test"
     assert rows[0][3] != "Not recorded"
-    assert rows[0][-4:] == [1, 1, 0, 0]
+    assert rows[0][-5:] == [1, 1, 0, 0, 0]
     detail = model.detail(b["git_commit"])
     assert len(detail["files"]) == 1
     assert {f["status"] for f in detail["files"]} == {"M"}

@@ -21,10 +21,10 @@ def test_net_only_mixed_changes_and_metadata_propagation():
         rect(net='P'), {**rect(2, net='N'), 'props': [['note', 'string', 'changed']]}, rect(4, net='N')])
     saved = copy.deepcopy([before, after])
     result = classify(before, after)
-    assert result['counts'] == dict(untouched=0, changed=1, netChanged=3, new=0)
+    assert result['counts'] == dict(untouched=0, changed=1, moved=0, netChanged=3, new=0)
     assert [before, after] == saved
     assert modification(inst, {**inst, 'connections': [['A', 'P', []]]}) == 'netChanged'
-    assert modification(inst, {**inst, 'connections': [['A', 'P', []]], 'xy': [2, 3]}) == 'changed'
+    assert modification(inst, {**inst, 'connections': [['A', 'P', []]], 'xy': [2, 3]}) == 'moved'
 
 
 def test_pin_nonconnectivity_properties_remain_modified():
@@ -44,12 +44,12 @@ def test_category_reference_and_streaming_separate_net_edits(tmp_path):
     index = ChangeIndex(*stores)
     try:
         assert index.rows == reference.rows
-        assert dict(index.totals) == dict(reference.totals) == dict(added=0, modified=1, deleted=0, modified_net=2)
+        assert dict(index.totals) == dict(reference.totals) == dict(added=0, modified=1, deleted=0, modified_net=2, moved=0)
         assert len([r for r in index.rows if r[0].startswith('Modified net /')]) == 2
         assert sum(r[2] for r in index.rows) == 1
         assert sum(r[4] for r in index.rows) == 2
         net_row = next(r for r in index.rows if r[0] == 'Modified net / MET1 shapes')
-        assert net_row[1:] == [0, 0, 0, 1]
+        assert net_row[1:] == [0, 0, 0, 1, 0]
         assert 'Modified net / MET1 shapes: 0A, 0M, 0D, 1MN' in index.overview()
         assert index.overview() == reference.overview()
         page = index.page(index.rows.index(net_row), 0)
@@ -67,7 +67,7 @@ def test_group_lifecycle_does_not_recolor_members_and_bounds_include_deleted():
     new = canonicalize([{**groups[0], 'props': [['edit', 'int', 1]]},
         dict(kind='figGroup', name='add', props=[]), rect(group='modify'), rect(3), rect(5, group='add')])
     result = classify(old, new)
-    assert result['counts'] == dict(untouched=3, changed=0, netChanged=0, new=0)
+    assert result['counts'] == dict(untouched=3, changed=0, moved=0, netChanged=0, new=0)
     assert {(g['name'], g['status'], g['side']) for g in result['group_changes']} == {
         ('modify', 'changed', 'after'), ('delete', 'deleted', 'before'), ('add', 'new', 'after')}
     for state, name in [(old, 'delete'), (new, 'add')]:
@@ -100,9 +100,23 @@ def test_legacy_styles_migrate_and_blink_is_driven_by_window_timer(tmp_path):
     assert worker.styles['changed'] == ['Blue', 'Dotted', '5', 'Steady']
     assert 'netChanged' in worker.styles and 'groupDeleted' in worker.styles
     assert worker.styles['netChanged'][0] != worker.styles['changed'][0]
+    assert worker.styles['moved'][0] not in {worker.styles[k][0] for k in ('changed','netChanged','new','deleted','untouched')}
     assert worker.styles['deleted'] == ['Red', 'Dashed', '3', 'Steady']
     assert ' 0 220 255 nil)' in display_resource('packet', ['Cyan', 'Solid', '3', 'Blink'])
     assert ' 0 220 255 nil)' in display_resource('packet', ['Cyan', 'Solid', '3', 'Steady'])
+
+
+def test_geometry_changes_separate_from_mixed_edits_and_net_only():
+    a=rect(net='N')
+    assert modification(a,rect(5,net='N'))=='moved'
+    assert modification(a,rect(5,net='P'))=='moved'
+    assert modification(a,rect(net='P'))=='netChanged'
+    assert modification(a,{**rect(5,net='N'),'props':[['x','int',1]]})=='changed'
+    assert modification(a,{**rect(5,net='N'),'layerName':'MET2'})=='changed'
+    inst=dict(kind='inst',name='I',xy=[0,0],orient='R0',params=[['w','float',1]])
+    assert modification(inst,{**inst,'xy':[100,0]})=='moved'
+    assert modification(inst,{**inst,'xy':[100,0],'params':[['w','float',2]]})=='changed'
+    assert modification(inst,{**inst,'xy':[100,0],'orient':'R90'})=='changed'
 
 
 def test_style_matrix_validates_all_rows_before_applying(tmp_path):

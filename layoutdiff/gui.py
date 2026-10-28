@@ -31,6 +31,7 @@ COLORS = {"Gray": (150, 163, 180), "Orange": (255, 165, 0), "Green": (64, 235, 1
 LINES = {"Solid": [1], "Dashed": [1, 1, 1, 1, 0, 0], "Dotted": [1, 0, 0],
          "Dash-dot": [1, 1, 1, 0, 0, 1, 0, 0]}
 DEFAULTS = {"untouched": ["Gray", "Solid", "1", "Steady"], "changed": ["Orange", "Dashed", "3", "Steady"],
+            "moved": ["Cyan", "Solid", "3", "Steady"],
             "netChanged": ["Blue", "Dotted", "3", "Steady"], "new": ["Green", "Solid", "3", "Steady"],
             "deleted": ["Red", "Dashed", "3", "Steady"],
             "groupNew": ["Green", "Dash-dot", "3", "Steady"],
@@ -101,6 +102,9 @@ class GuiWorker:
             if 'netChanged' not in saved_styles:
                 used = {self.styles[k][0] for k in ('untouched', 'changed', 'new')}
                 self.styles['netChanged'][0] = next(c for c in ('Blue', 'Cyan', 'Magenta', 'Yellow') if c not in used)
+            if 'moved' not in saved_styles:
+                used = {self.styles[k][0] for k in ('untouched', 'changed', 'netChanged', 'new', 'deleted')}
+                self.styles['moved'][0] = next(c for c in ('Cyan', 'Magenta', 'Yellow', 'Blue', 'Orange', 'Green') if c not in used)
         self.reviews = {}
         self.previews = {}
         self.lock_registry = None
@@ -282,7 +286,8 @@ class GuiWorker:
         display_summary = "\n".join(line for line in preview["summary"].splitlines() if not line.startswith("Kinds:"))
         display_summary = re.sub(r"Objects:.*", f"Changes: {categories.totals['added']}A, "
                                 f"{categories.totals['modified']}M, {categories.totals['deleted']}D, "
-                                f"{categories.totals['modified_net']} modified net", display_summary)
+                                f"{categories.totals['modified_net']} modified net, "
+                                f"{categories.totals['moved']} moved / stretched", display_summary)
         if preview['omissions']:
             display_summary = (preview['omission_warning'] + '\nTwo additional confirmations are required.\n\n' + display_summary)
         self.execute(f"ALDGUIShowQuickPreview({sk(token)} {sk(field_text(display_summary))} "
@@ -675,7 +680,7 @@ class GuiWorker:
             boundary_counts = {s: sum(r['status'] == s for r in boundaries) for s in ('new', 'changed', 'deleted')}
             counts = classification["counts"]
             summary = (f"Commit {commit_id[:12]}\n{'/'.join(identity)}\n"
-                f"Untouched: {counts['untouched']}   Modified: {counts['changed']}   Modified net: {counts['netChanged']}   New: {counts['new']}\n"
+                f"Untouched: {counts['untouched']}   Modified: {counts['changed']}   Moved / stretched: {counts['moved']}   Modified net: {counts['netChanged']}   New: {counts['new']}\n"
                 f"Group boundaries: {boundary_counts['new']} new, {boundary_counts['changed']} modified, {boundary_counts['deleted']} deleted\n"
                 f"Groups without drawable bounds: {sum(r['bBox'] is None for r in boundaries)}; boundary warnings: {len(boundary_warnings)}\n"
                 f"Deleted shadows: {shadows['count']} ({len(shadows['fallbacks'])} bounding-box fallbacks)\n"

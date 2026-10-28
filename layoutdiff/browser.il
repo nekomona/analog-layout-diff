@@ -15,10 +15,10 @@ procedure(ALDGUIBrowserCreate()
         ?headers '(("Cell" 160 left string nil) ("Library" 70 left string nil) ("View" 0 left string nil))
         ?choices nil ?altRowHilight t ?callback "ALDGUIBrowserSource(ALDGUIHistoryForm)")
       commits=hiCreateReportField(?name 'aldCommits ?title "GIT HISTORY / SELECTED LAYOUT" ?selectMode 'browse
-        ?headers '(("Revision" 95 left string nil) ("Message" 285 left string nil)
-          ("Author" 90 left string nil) ("Date" 145 left string nil)
+        ?headers '(("Revision" 95 left string nil) ("Message" 230 left string nil)
+          ("Author" 90 left string nil) ("Date" 130 left string nil)
           ("+ Objects" 65 right string nil) ("~ Objects" 65 right string nil) ("- Objects" 65 right string nil)
-          ("Modified net" 90 right string nil))
+          ("Modified net" 90 right string nil) ("Moved / stretched" 110 right string nil))
         ?choices nil ?altRowHilight t ?callback "ALDGUIBrowserSelection(ALDGUIHistoryForm)"
         ?doubleClickCB "ALDGUIHistoryCB(ALDGUIHistoryForm)")
       refs=hiCreateReportField(?name 'aldRefs ?title "BRANCHES / TAGS" ?selectMode 'browse
@@ -45,7 +45,7 @@ procedure(ALDGUIBrowserCreate()
       categories=hiCreateReportField(?name 'aldCategories ?title "CHANGE CATEGORIES" ?selectMode 'single
         ?headers '(("Layer / master / category" 330 left string nil)
           ("A" 45 right int nil) ("M" 45 right int nil) ("D" 45 right int nil)
-          ("Modified net" 100 right int nil))
+          ("Modified net" 100 right int nil) ("Moved / stretched" 120 right int nil))
         ?choices nil ?altRowHilight t ?callback "ALDGUIBrowserCategory(ALDGUIHistoryForm)")
       previous=hiCreateButton(?name 'aldPrevious ?buttonText "Previous" ?enabled nil
         ?callback "ALDGUIBrowserTurnPage(ALDGUIHistoryForm -1)")

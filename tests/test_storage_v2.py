@@ -111,7 +111,7 @@ def test_v2_migration_lazy_history_and_git_isolation(repo, tmp_path):
     assert model.rows(lazy=True)[0][-3:] == ["...", "...", "..."]
     assert model.pair(committed["git_commit"]) == (snapshot(1), snapshot(1))
     assert model.pair(old["git_commit"])[1] == snapshot(1)
-    assert model.detail(committed["git_commit"])["counts"] == {"added": 0, "modified": 0, "deleted": 0, "modified_net": 0}
+    assert model.detail(committed["git_commit"])["counts"] == {"added": 0, "modified": 0, "deleted": 0, "modified_net": 0, "moved": 0}
     model.close(); current.close()
     p = gc.prepare(repo, IDENTITY, snapshot(2))
     assert isinstance(p, gc.Prepared)

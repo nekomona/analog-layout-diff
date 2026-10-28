@@ -11,12 +11,12 @@ import math
 import sqlite3
 from itertools import chain
 from .core import encoded
+from .geometry_changes import POSITION, via_context
 
 ATTRIBUTES = {'props', 'net', 'pin', 'group', 'groupOrder', 'routeStatus'}
 ANNOTATIONS = {'mpp', 'mppOwner'}
 KINDS = {'rect', 'polygon', 'path', 'pathSeg', 'label', 'ellipse', 'line', 'donut', 'arc',
          'stdVia', 'prBoundary', 'snapBoundary', 'layerBlockage', 'areaBlockage', 'textDisplay'}
-POSITION = {'points', 'bBox', 'ellipseBBox', 'xy', 'origin', 'beginPt', 'endPt'}
 LIMIT = 32
 
 
@@ -90,7 +90,7 @@ def pairs(before, after):
     db = sqlite3.connect('')
     db.executescript('''PRAGMA cache_size=-4096; PRAGMA temp_store=FILE;
       CREATE TABLE items(id INTEGER PRIMARY KEY, side INT,key TEXT,raw BLOB,sig TEXT,rigid TEXT,
-                         family BLOB,x REAL,y REAL,active INT DEFAULT 1, name TEXT);
+                         family BLOB,x REAL,y REAL,active INT DEFAULT 1, name TEXT, context BLOB);
       CREATE VIRTUAL TABLE boxes USING rtree(id,x0,x1,y0,y1);
       CREATE TABLE anchors(side INT,token BLOB,id INT);
     ''')
@@ -99,9 +99,9 @@ def pairs(before, after):
             for key, r in records:
                 if r['kind'] not in KINDS: continue
                 box = bounds(r)
-                oid = db.execute('INSERT INTO items(side,key,raw,sig,rigid,family,x,y,name) VALUES (?,?,?,?,?,?,?,?,?)',
+                oid = db.execute('INSERT INTO items(side,key,raw,sig,rigid,family,x,y,name,context) VALUES (?,?,?,?,?,?,?,?,?,?)',
                     (side,key,encoded(r),signature(r),signature(r,translate=True),family(r),
-                     box[0] if box else None,box[1] if box else None,(r.get('mpp') or {}).get('name'))).lastrowid
+                     box[0] if box else None,box[1] if box else None,(r.get('mpp') or {}).get('name'),via_context(r))).lastrowid
         db.executescript('''CREATE INDEX exact ON items(side,active,sig,key);
           CREATE INDEX rigid ON items(side,active,rigid,x,y,key);
           CREATE INDEX named ON items(side,active,name,key);''')
@@ -143,6 +143,49 @@ def pairs(before, after):
                 for i,j in ((0,1),(0,3),(2,1),(2,3)):
                     db.execute('INSERT INTO anchors VALUES (?,?,?)',(side,encoded([family(r).decode(),i,j,box[i],box[j]]),oid))
         db.execute('CREATE INDEX anchor ON anchors(side,token,id)')
+        db.execute('CREATE INDEX via_context ON items(side,active,context,rigid,x,y)')
+        # Standard vias persist an origin and overrides, not a footprint. The
+        # ordinary shape scorer's 1-DBU extent rejected almost every via move.
+        # Compare compatible point objects, preferring identical via geometry,
+        # then size/orientation edits. Require reciprocal nearest matches with
+        # a 2x distance separation; freeze each pass before consuming anything.
+        extent = db.execute('SELECT min(x),max(x),min(y),max(y) FROM items WHERE context IS NOT NULL').fetchone()
+        span = max((extent[1]-extent[0]) if extent[0] is not None else 0,
+                   (extent[3]-extent[2]) if extent[2] is not None else 0, 1) * 2
+        def via_best(row, side, rigid_only):
+            oid, key, context, rigid, x, y = row
+            if x is None or y is None: return None
+            clause = 'i.side=? AND i.active=1 AND i.context=?'
+            args = [side, context]
+            if rigid_only:
+                clause += ' AND i.rigid=?'; args.append(rigid)
+            candidates = db.execute('SELECT i.id,i.key,i.context,i.rigid,i.x,i.y FROM items i WHERE '+clause+' LIMIT ?', (*args,LIMIT+1)).fetchall()
+            if len(candidates)>LIMIT:
+                radius = 1
+                while True:
+                    candidates = db.execute('SELECT i.id,i.key,i.context,i.rigid,i.x,i.y FROM boxes b '
+                        'CROSS JOIN items i ON i.id=b.id WHERE '+clause+
+                        ' AND b.x0<=? AND b.x1>=? AND b.y0<=? AND b.y1>=? LIMIT ?',
+                        (*args,x+radius,x-radius,y+radius,y-radius,LIMIT+1)).fetchall()
+                    if len(candidates)>LIMIT: return None
+                    if len(candidates)>=2 or radius>=span: break
+                    if candidates and radius>=2*math.hypot(candidates[0][4]-x,candidates[0][5]-y): break
+                    radius *= 4
+            ranked = sorted((math.hypot(r[4]-x,r[5]-y),r) for r in candidates if r[4] is not None and r[5] is not None)
+            if not ranked or (len(ranked)>1 and 2*ranked[0][0]>=ranked[1][0]): return None
+            return ranked[0][1]
+        for rigid_only in (True, False):
+            db.execute('CREATE TEMP TABLE via_choices(new INT PRIMARY KEY,old INT UNIQUE)')
+            for row in db.execute('SELECT id,key,context,rigid,x,y FROM items WHERE side=1 AND active=1 AND context IS NOT NULL ORDER BY key'):
+                chosen = via_best(row,0,rigid_only)
+                reverse = via_best(chosen,1,rigid_only) if chosen else None
+                if reverse and reverse[0]==row[0]:
+                    db.execute('INSERT INTO via_choices VALUES (?,?)',(row[0],chosen[0]))
+            for new,old in db.execute('SELECT new,old FROM via_choices ORDER BY new'):
+                nk=db.execute('SELECT key FROM items WHERE id=?',(new,)).fetchone()[0]
+                ok=db.execute('SELECT key FROM items WHERE id=?',(old,)).fetchone()[0]
+                yield consume((new,nk),(old,ok),'via translation' if rigid_only else 'via size/orientation')
+            db.execute('DROP TABLE via_choices')
         def best(oid, side, raw):
             r = json.loads(raw); box = bounds(r)
             if not box: return None

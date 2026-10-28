@@ -33,6 +33,11 @@ def modification(before, after):
         return "untouched"
     if encoded(without_connectivity(before)) == encoded(without_connectivity(after)):
         return "netChanged"
+    from .geometry_changes import without_geometry
+    if (before['kind'] in VISUAL and
+            encoded(without_geometry(without_connectivity(before))) ==
+            encoded(without_geometry(without_connectivity(after)))):
+        return "moved"
     return "changed"
 
 
@@ -73,7 +78,7 @@ def classify(before, after):
             groups[key] = "netChanged"
     visual = {k: v for k, v in groups.items() if new[k]["kind"] in VISUAL}
     from .review_groups import group_changes
-    return {"groups": visual, "counts": {s: list(visual.values()).count(s) for s in ("untouched", "changed", "netChanged", "new")},
+    return {"groups": visual, "counts": {s: list(visual.values()).count(s) for s in ("untouched", "changed", "moved", "netChanged", "new")},
             "group_changes": group_changes(before, after, pairs),
             "removed": sorted(remaining), "attribute_pairs": pairs,
             "pair_evidence": evidence,

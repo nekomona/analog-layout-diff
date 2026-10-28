@@ -6,6 +6,7 @@ from .core import encoded
 from .review import VISUAL, modification
 
 PAGE_SIZE = 10
+COUNT_FIELDS = ('added', 'modified', 'deleted', 'modified_net', 'moved')
 
 
 def snapshot_changes(before, after):
@@ -48,7 +49,7 @@ def status(op):
         return 'added'
     if op['after'] is None:
         return 'deleted'
-    return 'modified_net' if modification(op['before'], op['after']) == 'netChanged' else 'modified'
+    return {'netChanged': 'modified_net', 'moved': 'moved'}.get(modification(op['before'], op['after']), 'modified')
 
 
 def operation_category(op):
@@ -58,6 +59,8 @@ def operation_category(op):
             label = category(op['before']) + ' -> ' + label
         if status(op) == 'modified_net':
             label = 'Modified net / ' + label
+        elif status(op) == 'moved':
+            label = 'Moved / stretched / ' + label
         elif modification(op['before'], op['after']) == 'untouched':
             label = 'Group membership / ' + label
     return label
@@ -127,20 +130,21 @@ class CategoryDiff:
             label = operation_category(op)
             groups[label].append(op)
         self.groups = [(label, groups[label]) for label in sorted(groups)]
-        self.totals = Counter(added=0, modified=0, deleted=0, modified_net=0)
+        self.totals = Counter(dict.fromkeys(COUNT_FIELDS, 0))
         self.rows = []
         for label, ops in self.groups:
             counts = Counter(status(op) for op in ops)
             self.totals.update(counts)
-            self.rows.append([label, counts["added"], counts["modified"], counts["deleted"], counts["modified_net"]])
+            self.rows.append([label, *(counts[k] for k in COUNT_FIELDS)])
 
     def overview(self, *, interactive=True):
-        return ("Layout changes by category (A added, M modified, D deleted, MN modified net)\n\n" +
-                "\n".join(f"{label}: {a}A, {m}M, {d}D, {mn}MN" for label, a, m, d, mn in self.rows) +
+        return ("Layout changes by category (A added, M modified, D deleted, MN modified net, MS moved / stretched)\n\n" +
+                "\n".join(f"{label}: {a}A, {m}M, {d}D, {mn}MN, {ms}MS" for label, a, m, d, mn, ms in self.rows) +
                 ("\nNo element changes." if not self.rows else "") +
                 ("\n\nSelect a category for paged details. Open full diff includes every changed field." if interactive else
                    "\n\nView full diff shows every changed field. Saved snapshots retain all details.") +
-                "\nMN counts connectivity-only changes; M excludes these changes."
+                "\nMN counts connectivity-only changes. MS counts position/size edits; M excludes both."
+                "\nPosition/size edits combined with other property, layer or orientation changes stay M."
                 "\nMoves/stretches use conservative geometric matching; ambiguous pairs remain A/D."
                 "\nMosaics count as array objects. Dependencies and metadata have separate rows.")
 

@@ -76,7 +76,7 @@ def test_group_reordering_highlights_only_group_boundaries():
     before = canonicalize(records)
     records[3]['groupOrder'], records[4]['groupOrder'] = 0, 2
     changes = classify(before, canonicalize(records))
-    assert changes['counts'] == {'untouched': 3, 'changed': 0, 'netChanged': 0, 'new': 0}
+    assert changes['counts'] == {'untouched': 3, 'changed': 0, 'moved': 0, 'netChanged': 0, 'new': 0}
     assert any(g['status'] == 'changed' for g in changes['group_changes'])
     assert not changes['removed']
 

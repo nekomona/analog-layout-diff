@@ -15,7 +15,7 @@ def test_categories_preserve_storage_and_pair_moves_and_attribute_edits():
     saved = copy.deepcopy([before, after])
     operations = diff(before, after)["operations"]
     result = CategoryDiff(operations)
-    assert result.rows == [["MET1 shapes", 0, 2, 0, 0]]
+    assert result.rows == [["MET1 shapes", 0, 1, 0, 0, 0], ["Moved / stretched / MET1 shapes", 0, 0, 0, 0, 1]]
     assert result.raw_operations == 4
     assert [before, after] == saved
     assert snapshot_changes(before, after) == operations
@@ -27,7 +27,7 @@ def test_duplicates_pair_once_without_hiding_multiplicity():
     before = canonicalize([rect()] * 3)
     after = canonicalize([rect(props=[["p", "int", 1]])] * 2)
     result = CategoryDiff(diff(before, after)["operations"])
-    assert result.rows == [["MET1 shapes", 0, 2, 1, 0]]
+    assert result.rows == [["MET1 shapes", 0, 2, 1, 0, 0]]
 
 
 def test_vias_pcells_cells_mosaics_connectivity_and_metadata():
@@ -44,7 +44,7 @@ def test_vias_pcells_cells_mosaics_connectivity_and_metadata():
                       "LIB/CHILD dependency", "Cellview properties", "Connectivity / nets", "MET1/pin shapes", "MET1 labels"]
     changed = {**records[2], "cellName": "OTHER"}
     result = CategoryDiff([{"key": "inst:I", "before": records[2], "after": changed}])
-    assert result.rows == [["LIB/CHILD cell -> LIB/OTHER cell", 0, 1, 0, 0]]
+    assert result.rows == [["LIB/CHILD cell -> LIB/OTHER cell", 0, 1, 0, 0, 0]]
 
 
 def test_page_bounds_and_complete_export_with_large_properties():
@@ -52,7 +52,7 @@ def test_page_bounds_and_complete_export_with_large_properties():
             "after": {"kind": "inst", "name": f"I{i:03d}", "libName": "LIB", "cellName": "CELL",
                       "props": [["long", "string", "x" * 2000 + f"END{i:03d}"]]}} for i in range(23)]
     result = CategoryDiff(ops)
-    assert result.rows == [["LIB/CELL cell", 23, 0, 0, 0]]
+    assert result.rows == [["LIB/CELL cell", 23, 0, 0, 0, 0]]
     first, last = result.page(0, 0), result.page(0, 2)
     assert first["pages"] == 3 and len(first["text"].encode()) < 7600
     assert "inst:I009" in first["text"] and "inst:I010" not in first["text"]
@@ -65,7 +65,7 @@ def test_page_bounds_and_complete_export_with_large_properties():
 def test_100k_initial_elements_reduce_to_one_category():
     ops = [{"key": f"shape:{i}", "before": None, "after": rect(i)} for i in range(100000)]
     result = CategoryDiff(ops)
-    assert result.rows == [["MET1 shapes", 100000, 0, 0, 0]]
+    assert result.rows == [["MET1 shapes", 100000, 0, 0, 0, 0]]
     assert result.page(0, 9999)["pages"] == 10000
     assert "shape:99999" in result.page(0, 9999)["text"]
 

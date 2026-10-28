@@ -12,7 +12,7 @@ def test_review_groups_attribute_pair_and_removed_geometry():
                         {"kind": "inst", "name": "I", "xy": [10, 0]},
                         {**moved, "bBox": [[40, 0], [50, 10]]}])
     result = classify(old, new)
-    assert result["counts"] == {"untouched": 1, "changed": 3, "netChanged": 0, "new": 0}
+    assert result["counts"] == {"untouched": 1, "changed": 1, "moved": 2, "netChanged": 0, "new": 0}
     assert len(result["removed"]) == 0
     assert len(result["attribute_pairs"]) == 2
 

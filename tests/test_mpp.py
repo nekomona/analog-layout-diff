@@ -38,7 +38,7 @@ def test_exact_patch_preserves_recipe_and_generated_members(tmp_path):
     a=from_snapshot(new,tmp_path/'v2')
     try: assert a.materialize()==new
     finally: a.close()
-    assert classify(old,new)['counts']['changed']==1
+    assert classify(old,new)['counts']['moved']==1
 
 
 def test_replay_is_invariant_to_json_and_git_store_record_order(tmp_path):

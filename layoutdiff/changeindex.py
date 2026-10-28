@@ -2,7 +2,7 @@
 from collections import Counter
 from pathlib import Path
 import tempfile
-from .categories import CategoryDiff, operation_category, status, operation_text, operation_excerpt, PAGE_SIZE
+from .categories import CategoryDiff, operation_category, status, operation_text, operation_excerpt, PAGE_SIZE, COUNT_FIELDS
 from .core import encoded
 from .storage import spool, strict_json
 from . import streaming
@@ -53,11 +53,11 @@ class ChangeIndex:
         db.execute("CREATE INDEX pages ON changes(category,key)")
         db.commit()
         grouped = {}
-        self.totals = Counter(added=0, modified=0, deleted=0, modified_net=0)
+        self.totals = Counter(dict.fromkeys(COUNT_FIELDS, 0))
         for label, kind, n in db.execute("SELECT category,status,count(*) FROM changes GROUP BY category,status"):
             grouped.setdefault(label, Counter())[kind] = n
             self.totals[kind] += n
-        self.rows = [[label, c["added"], c["modified"], c["deleted"], c["modified_net"]] for label, c in sorted(grouped.items())]
+        self.rows = [[label, *(c[k] for k in COUNT_FIELDS)] for label, c in sorted(grouped.items())]
 
     @staticmethod
     def label(op):

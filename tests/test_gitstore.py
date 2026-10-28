@@ -26,7 +26,7 @@ def test_ordinary_git_commits_multiple_cells_and_worktree_isolation(repo):
     assert [c["id"] for c in model.commits] == [changed, a["git_commit"]]
     assert model.pair(changed) == (snapshot(1), snapshot(2))
     assert len(model.detail(changed)["files"]) == 2
-    assert model.rows()[0][-4:] == [0, 1, 0, 0]
+    assert model.rows()[0][-5:] == [0, 1, 0, 0, 0]
     assert gs.sources(repo) == [other, IDENTITY]
     assert (repo / ".git/index").read_bytes() == index
 
@@ -53,14 +53,14 @@ def test_legacy_git_migration_reads_blobs_without_custom_chain(repo):
     model = HistoryBrowser(None, IDENTITY, repo)
     assert len(model.commits) == 3
     assert model.pair(legacy_head) == (snapshot(1), snapshot(2))
-    assert model.rows()[0][-4:] == [0, 0, 0, 0]
+    assert model.rows()[0][-5:] == [0, 0, 0, 0, 0]
     assert not gc.prepare(repo, IDENTITY, snapshot(2))["write_required"]
     # A later deletion must not resurrect the archived latest snapshot.
     gc.git(repo, "rm", "--", gs.snapshot_path(IDENTITY))
     gc.git(repo, "commit", "-m", "Delete snapshot")
     model = HistoryBrowser(None, IDENTITY, repo)
     assert model.pair(gs.head(repo)) == (snapshot(2), empty_snapshot())
-    assert model.rows()[0][-4:] == [0, 0, 1, 0]
+    assert model.rows()[0][-5:] == [0, 0, 1, 0, 0]
     assert IDENTITY in gs.sources(repo)
 
 

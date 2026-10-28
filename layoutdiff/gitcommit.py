@@ -213,7 +213,7 @@ def prepare_v2(repo, identity, snapshot, *, backend="auto"):
         stat = changes.totals
         summary = (f"Repository: {repo}\nBranch: {base['branch'].removeprefix('refs/heads/')}\n"
             f"Layout: {' / '.join(identity)}\nBase Git commit: {base['head'] or '(initial commit)'}\n"
-            f"Changes: {stat['added']}A, {stat['modified']}M, {stat['deleted']}D, {stat['modified_net']} modified net\n"
+            f"Changes: {stat['added']}A, {stat['modified']}M, {stat['deleted']}D, {stat['modified_net']} modified net, {stat['moved']} moved / stretched\n"
             f"Snapshot: {prefix} (JSON Lines v2)\nProcessing backend: {changes.backend}\n" +
             ("Migrate this layout to v2 in this commit; historical snapshots remain readable.\n" if adopting else "") +
             "Cancel keeps the layout saved and creates no Git commit.")

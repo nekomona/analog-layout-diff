@@ -15,7 +15,7 @@ unless(boundp('ALDGUIBlinkGeneration) ALDGUIBlinkGeneration=0)
 ALDGUIBlinkGeneration=ALDGUIBlinkGeneration+1
 ALDGUIBlinkScheduled=nil
 ALDGUIBlinkPhase=t
-ALDGUIStyleChoices='(("Untouched" "untouched") ("Modified" "changed") ("Modified net" "netChanged")
+ALDGUIStyleChoices='(("Untouched" "untouched") ("Modified" "changed") ("Moved / stretched" "moved") ("Modified net" "netChanged")
   ("New" "new") ("Deleted" "deleted") ("New groups" "groupNew") ("Modified groups" "groupChanged") ("Deleted groups" "groupDeleted"))
 ALDGUIHighlightGroups=foreach(mapcar choice ALDGUIStyleChoices cadr(choice))
 ; Recreate the preview after a plugin reload so upgraded field layouts take effect.
@@ -537,6 +537,8 @@ procedure(ALDGUIOpenReview(token lib cell source assignments packets icons summa
           ?checkable t ?checked nil ?callback sprintf(nil "ALDGUIToggle(window(%d) \"untouched\")" n))
         hiCreateAction(?name 'changed ?iconText "Modified" ?icon cadr(assoc("changed" icons))
           ?checkable t ?checked t ?callback sprintf(nil "ALDGUIToggle(window(%d) \"changed\")" n))
+        hiCreateAction(?name 'moved ?iconText "Moved / stretched" ?icon cadr(assoc("moved" icons))
+          ?checkable t ?checked t ?callback sprintf(nil "ALDGUIToggle(window(%d) \"moved\")" n))
         hiCreateAction(?name 'netChanged ?iconText "Modified net" ?icon cadr(assoc("netChanged" icons))
           ?checkable t ?checked t ?callback sprintf(nil "ALDGUIToggle(window(%d) \"netChanged\")" n))
         hiCreateAction(?name 'new ?iconText "New" ?icon cadr(assoc("new" icons))

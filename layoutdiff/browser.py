@@ -5,7 +5,7 @@ from .core import empty_snapshot, diff
 from .gitcommit import git
 from .gitstore import GitSnapshots
 from .gittools import textconv
-from .categories import CategoryDiff
+from .categories import CategoryDiff, COUNT_FIELDS
 
 
 def field_text(text, limit=7600):
@@ -74,7 +74,7 @@ class HistoryBrowser:
             stat = self.count_cache.get(commit["id"])
             if stat is None and not lazy:
                 stat = self.categories(commit["id"]).totals
-            values = [stat[k] for k in ("added", "modified", "deleted", "modified_net")] if stat is not None else ["..."] * 4
+            values = [stat[k] for k in COUNT_FIELDS] if stat is not None else ["..."] * len(COUNT_FIELDS)
             rows.append([meta.get("sha", commit["id"])[:10], commit["message"].replace("\n", " ")[:250],
                          meta.get("author", "Local history"), meta.get("date", "Not recorded").replace("T", " ")[:19],
                          *values])
@@ -141,6 +141,7 @@ class HistoryBrowser:
                    + (f"Processing backend: {categories.backend}\n" if self.store else "Legacy local archive (read only)\n") +
                    f"Layout changes: +{stat['added']} added   ~{stat['modified']} modified   -{stat['deleted']} deleted"
                    f"   {stat['modified_net']} modified net"
+                   f"   {stat['moved']} moved / stretched"
                    f"    |    {len(files)} affected files")
         from .omissions import warning
         omission_warning = warning(self.store.omissions(commit_id)) if self.store else ''
