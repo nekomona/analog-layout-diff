@@ -1,94 +1,79 @@
-# Analog layout diff
+# Analog Layout Diff
 
-An experimental layout versioning tool for Cadence Virtuoso. It stores canonical
-cellview snapshots in Git, compares revisions semantically, and reconstructs a
-revision in a fresh cellview. The optional standalone operation-chain CLI supports
-replay from an empty state. File-only operations do not require Cadence; native
-capture and reconstruction use the installed `virtuoso_bridge` package.
+Git snapshots and semantic review for analog layouts in Cadence Virtuoso.
+Capture layout state, compare geometry, connectivity and properties, then
+reconstruct a recorded revision in a fresh cellview. Native operations use
+[virtuoso-bridge-lite](https://github.com/Arcadia-1/virtuoso-bridge-lite);
+file-only comparison and replay run independently of Cadence.
 
-Start with the [documentation index](docs/README.md),
-[program structure](docs/architecture/PROGRAM_STRUCTURE.md),
-[data model](docs/data/MODEL.md), and
-[processing pipeline](docs/architecture/PROCESSING_PIPELINE.md).
+[Quick start](#quick-start) · [Documentation](docs/README.md) ·
+[Architecture](docs/architecture/PROGRAM_STRUCTURE.md) ·
+[Contributing](CONTRIBUTING.md)
 
-## Install
+## What it does
 
-Use `uv` and a virtual environment:
+| Capability | Workflow |
+| --- | --- |
+| Capture and version | Canonical layout records stored as deterministic, reviewable JSONL in Git |
+| Compare and review | Geometry, connectivity and property changes, conservative movement matching, category counts and native highlights |
+| Reconstruct and verify | Fresh-cell reconstruction with native readback and hierarchy-drift warnings |
+| Work from files | Exact diff/apply, integrity-checked replay and a separate KLayout GDS/OASIS frontend |
+
+The Virtuoso toolbar provides **Save & Commit**, **History** and **Runtime**.
+Save & Commit saves the edited view, previews changes and commits after
+confirmation. Review opens a temporary read-only reconstruction. See the
+[UI guide](docs/ui/README.md) for review styles and checkpoint restore.
+
+## Quick start
+
+From a checkout, use `uv` and a virtual environment:
 
 ```sh
 uv venv .venv
 uv pip install --python .venv/Scripts/python.exe -e ".[verify]"
 ```
 
-On Linux use `.venv/bin/python`. The core has no mandatory runtime dependencies;
-stream-layout operations additionally use KLayout. Native commands require
-[virtuoso-bridge-lite](https://github.com/Arcadia-1/virtuoso-bridge-lite), installed
-explicitly as the `virtuoso-bridge` distribution (`import virtuoso_bridge`), plus
-a working Bridge connection to the intended CIW. Installing this project alone does
-not install Bridge. See [Bridge installation and connections](docs/runtime/BRIDGE.md)
-before following the [runtime deployment guide](docs/runtime/README.md).
-
-## Snapshot and history CLI
-
-Run these commands in the activated environment. Names below are placeholders;
-select your own source and a dedicated writable test library.
+On Linux use `.venv/bin/python`. Activate the environment before running commands.
+With two existing JSON snapshots, compare and apply changes offline:
 
 ```sh
-python -m layoutdiff capture MY_LIB MY_CELL before.json
-python -m layoutdiff coverage before.json
 python -m layoutdiff diff before.json after.json change.json
 python -m layoutdiff apply before.json change.json replayed.json
-python -m layoutdiff init my-history
-python -m layoutdiff record my-history MY_LIB MY_CELL -m "Initial layout"
-python -m layoutdiff log my-history
-python -m layoutdiff replay my-history latest.json
-python -m layoutdiff restore latest.json reconstructed_cell --library TEST_LIB --allow-library TEST_LIB
 ```
 
-`record` rejects unsupported native content. `capture` can retain diagnostics in
-v1; strict v2 capture requires fully supported content. Reconstruction refuses an
-existing destination. The default writable library is `LAYOUT_DIFF_TEST`; create
-and attach your own test library before native use, or supply `--allow-library`.
-See [formats](docs/data/STORAGE_FORMAT.md) and [CLI preservation limits](docs/ui/CLI.md).
+For native capture, install the `virtuoso-bridge` distribution in the same
+environment and establish its connection to the intended CIW. Follow
+[Bridge setup](docs/runtime/BRIDGE.md), then capture or reconstruct:
 
-## Git and native GUI
+```sh
+python -m layoutdiff capture MY_LIB MY_CELL snapshot.json
+python -m layoutdiff restore snapshot.json reconstructed_cell --library TEST_LIB --allow-library TEST_LIB
+```
 
-The toolbar provides **Save & Commit**, **History**, and **Runtime**. Save & Commit
-saves the edited layout, previews changes, and commits after confirmation.
-Cancel leaves the layout saved. Git is the commit authority; snapshots live at
-`layouts/<library>/<cell>/<view>.layout/` as deterministic JSONL and a manifest.
-History supports cell and Git revision selection, category counts, paged changes,
-full diffs, and temporary read-only native review.
+Create a dedicated writable test library with compatible technology first.
+Restore refuses an existing destination. Installing Layout Diff alone does not
+install Bridge. The supplied GUI installer also requires the source arrangement
+described in [runtime deployment](docs/runtime/README.md#deployment).
 
-Review distinguishes Modified, Modified net, Moved / stretched, New, Deleted and
-Untouched content, with group boundaries and configurable styles. Anonymous
-geometry correspondence is inferred conservatively; exact patches remain
-content-based. The guarded Restore checkpoint workflow verifies a reconstruction
-before asking to replace a saved working layout. See the
-[Git workflow](docs/git/README.md) and [GUI guide](docs/ui/README.md).
+## Scope
 
-## Supported content and limits
+The native codec supports a defined OA/ROD subset. Referenced masters, technology
+and PCell programs remain external; hierarchy fingerprints do not archive child
+layouts. Unknown content blocks strict reconstruction. Supported-only GUI commits
+require explicit loss confirmation and retain an omission audit. Use a separate
+database archive for production recovery.
 
-The codec covers integer-DBU geometry, labels, typed properties, scalar
-connectivity, ordinary/PCell instances, simple mosaics, standard vias, ordinary
-figure groups, logical groups, supported placement annotations, and supported
-ROD multipart-path recipes and generated figures. See the
-[coverage table](docs/virtuoso/COVERAGE.md) for attribute-level limits.
+See [native coverage](docs/virtuoso/COVERAGE.md),
+[preservation limits](docs/ui/CLI.md), and the
+[KLayout frontend](docs/klayout_plugin/README.md). GDS comparison verifies exported
+geometry and labels, rather than the full native object graph.
 
-Technology, referenced masters and PCell programs remain external dependencies.
-Hierarchy fingerprints detect drift without archiving child layouts. Routes,
-markers and Steiners are excluded; their independent member geometry remains
-tracked. Unknown native content blocks strict reconstruction. The GUI can commit
-a supported-only checkpoint after two explicit confirmations and retains an
-omission audit. That audit does not guarantee future native restoration.
+## Contribute
 
-This versioned OA subset should not be the sole archive of a production database.
-GDS XOR checks exported geometry and labels, not native connectivity or editing
-semantics. The optional [C++ backend](docs/native-performance/README.md) accelerates validated
-stream merging and patch application. The separate [KLayout adapter](docs/klayout_plugin/README.md)
-handles static GDS/OASIS data and snapshot images.
-
-## Development
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, change boundaries, validation
+and pull requests. Use commit subjects such as
+`fix(comparison): preserve ambiguous via matches as additions and deletions`;
+the [commit convention](docs/development/COMMITS.md) defines types and scopes.
 
 ```sh
 python -m pytest tests klayout_plugin/tests -q --basetemp=.test-tmp-run
@@ -96,6 +81,5 @@ python scripts/check_docs.py
 python scripts/check_publication.py
 ```
 
-See [development](docs/development/README.md) and [verification](docs/development/VERIFICATION.md).
-Generated evidence and local agent instructions are ignored. Public examples and
-fixtures use synthetic data; keep site configuration and captured designs local.
+Public examples and fixtures use synthetic data. Keep agent instructions,
+site configuration and captured designs in ignored local storage.

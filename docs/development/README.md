@@ -1,5 +1,8 @@
 # Development
 
+Start with [CONTRIBUTING.md](../../CONTRIBUTING.md) for the contribution workflow
+and [commit naming](COMMITS.md) for subject types, component scopes and templates.
+
 Use `uv` and a virtual environment; never install into global Python.
 
 ```sh
@@ -77,6 +80,9 @@ Remove release timelines, superseded instructions and unimplemented proposals.
 Document supported formats and compatibility behavior as current capabilities;
 schema versions identify data contracts, independently of application releases.
 Run the relevant checks before tagging a validated source revision.
+
+Use `<type>(<scope>): <summary>` for commit subjects and pull request titles.
+The [commit convention](COMMITS.md) defines the available types and scopes.
 
 Source history and layout snapshot repositories are separate. Source maintenance
 must not modify a designer's runtime or design repository.

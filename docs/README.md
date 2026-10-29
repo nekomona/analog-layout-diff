@@ -27,7 +27,9 @@ for the complete capture-to-review flow.
 | Optional C++ kernel | [Native performance backend](native-performance/README.md) |
 | Separate static-layout frontend | [KLayout tools](klayout_plugin/README.md) |
 | Cross-package GUI requests | [Interaction sequences](ui/INTERACTION_SEQUENCES.md) |
-| Setup, contribution and documentation | [Development](development/README.md) |
+| Setup and documentation maintenance | [Development](development/README.md) |
+| Contribution workflow and pull requests | [Contributing](../CONTRIBUTING.md) |
+| Commit and pull request titles | [Commit convention](development/COMMITS.md) |
 | Test responsibilities and limits | [Verification](development/VERIFICATION.md) |
 
 ```text

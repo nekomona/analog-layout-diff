@@ -1,0 +1,14 @@
+
+# <type>(<scope>): <summary>
+# Types: feat, fix, docs, refactor, perf, test, build, ci, chore, revert
+# Scopes: data, comparison, virtuoso, git, ui, runtime, native, klayout,
+#         docs, tests, tooling, deps, project
+# Imperative English summary; lowercase verb; no final period; aim for <=72 chars.
+#
+# Explain the problem and resulting behavior after a blank line.
+# Record relevant validation and any material limits.
+#
+# For a breaking public API/format change, add ! before the colon and explain:
+# BREAKING CHANGE: <impact and migration>
+#
+# See CONTRIBUTING.md and docs/development/COMMITS.md.
