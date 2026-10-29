@@ -4,6 +4,11 @@
 reconstructs supported records through Virtuoso Bridge. Native APIs, technology,
 referenced masters and PCell programs remain external dependencies.
 
+The Bridge repository is `virtuoso-bridge-lite`; its import is `virtuoso_bridge`.
+It supplies execution/transport and native utility APIs, while this package owns
+Layout Diff's OA/ROD record model and replay helpers. See
+[Bridge integration](../runtime/BRIDGE.md) for installation and connection setup.
+
 ## Capture and reconstruction
 
 Capture reads native state, scales geometry to integer DBU, decodes typed

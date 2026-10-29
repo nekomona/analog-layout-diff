@@ -148,7 +148,7 @@ matching remains Python-owned even when the exact merge runs in C++.
 flowchart LR
     V["External Virtuoso host / OA APIs"]
     SK["Layout Diff SKILL services and UI queue"]
-    B["External shared bridge"]
+    B["External virtuoso-bridge-lite daemon / transport"]
     W["Python UI worker"]
     S["Python supervisor"]
     J["Optional cleanup janitor"]
@@ -182,6 +182,13 @@ Normal operation is host-local. Remote development can supply an SSH-backed
 bridge client, while the installed worker uses `VirtuosoClient.local` and local
 filesystem access. The bridge PID check selects the intended CIW. Loading
 indicators do not imply parallel mutation of the native database.
+
+The external Python package is `virtuoso_bridge` (distribution `virtuoso-bridge`).
+It provides execution, transport, file and native utility services; Layout Diff
+owns its record model, capture/replay helpers, Git/UI workflows and runtime.
+The shared Bridge daemon has a separate lifetime from the Layout Diff worker.
+See [Bridge integration](../runtime/BRIDGE.md) for package requirements, connection
+paths and the installer/runtime host assumptions.
 
 ## Request and data interfaces
 

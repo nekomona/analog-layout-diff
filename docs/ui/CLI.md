@@ -19,6 +19,11 @@ it is not a persistent Layout Diff service. A direct OA reader or batch-Virtuoso
 launcher is not implemented, so native CLI operations do not eliminate Virtuoso
 or its bridge requirement.
 
+Native commands use `VirtuosoClient.from_env()` and the Bridge-resolved profile.
+The Layout Diff CLI has no Bridge `--profile`/`--env` options; use the active
+environment's profile binding or pass a selected client through the Python API.
+See [connection setup](../runtime/BRIDGE.md#connection-paths).
+
 From an activated environment with the package available:
 
 ```sh

@@ -5,6 +5,12 @@ session workspaces and cleanup. SKILL launches the supervisor on the Virtuoso
 host; the supervisor starts a Python UI worker. The worker calls the local shared
 bridge. A bridge-free cleanup janitor can remain after worker Stop.
 
+The external dependency is [virtuoso-bridge-lite](https://github.com/Arcadia-1/virtuoso-bridge-lite)
+(`virtuoso-bridge` distribution, `virtuoso_bridge` import). Follow
+[Bridge integration](BRIDGE.md) for installation, daemon setup, profile/port
+selection and the supported host topology. Stopping Layout Diff leaves that
+shared Bridge service running.
+
 ## Select the intended CIW
 
 Use a separate bridge profile/port for each concurrent CIW. Check process/display
@@ -14,9 +20,11 @@ The worker verifies the bridge endpoint's process identity before UI/database wo
 
 ## Deployment
 
-Use a virtual environment with Virtuoso Bridge installed and its source checkout
-beside this project; the installer bundles that sibling checkout. The target host
-needs `uv` on PATH. Select a dedicated absolute directory:
+Use a virtual environment with both packages installed and a working SSH-backed
+Bridge connection. The installer requires Layout Diff nested inside the Bridge
+source checkout, reading `../src/virtuoso_bridge` and `../pyproject.toml`; see
+[the required directory layout](BRIDGE.md#installer-layout-and-host-assumptions).
+The target host needs `uv` on PATH. Select a dedicated absolute directory:
 
 ```sh
 python scripts/install_runtime.py --destination /absolute/path/to/layoutdiff_runtime

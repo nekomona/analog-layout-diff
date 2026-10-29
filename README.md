@@ -20,10 +20,13 @@ uv venv .venv
 uv pip install --python .venv/Scripts/python.exe -e ".[verify]"
 ```
 
-On Linux use `.venv/bin/python`. Native commands also require an installed
-Virtuoso Bridge package and an active connection to the intended CIW. See the
-[runtime guide](docs/runtime/README.md) for deployment. The pure diff/history package
-has no runtime dependencies; stream-layout operations additionally use KLayout.
+On Linux use `.venv/bin/python`. The core has no mandatory runtime dependencies;
+stream-layout operations additionally use KLayout. Native commands require
+[virtuoso-bridge-lite](https://github.com/Arcadia-1/virtuoso-bridge-lite), installed
+explicitly as the `virtuoso-bridge` distribution (`import virtuoso_bridge`), plus
+a working Bridge connection to the intended CIW. Installing this project alone does
+not install Bridge. See [Bridge installation and connections](docs/runtime/BRIDGE.md)
+before following the [runtime deployment guide](docs/runtime/README.md).
 
 ## Snapshot and history CLI
 

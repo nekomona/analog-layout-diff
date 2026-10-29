@@ -23,6 +23,7 @@ for the complete capture-to-review flow.
 
 | Component | Guide |
 | --- | --- |
+| External Virtuoso Bridge dependency and connections | [Bridge integration](runtime/BRIDGE.md) |
 | Optional C++ kernel | [Native performance backend](native-performance/README.md) |
 | Separate static-layout frontend | [KLayout tools](klayout_plugin/README.md) |
 | Cross-package GUI requests | [Interaction sequences](ui/INTERACTION_SEQUENCES.md) |

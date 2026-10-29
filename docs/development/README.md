@@ -9,7 +9,9 @@ uv pip install --python .venv/Scripts/python.exe -e ".[verify]"
 
 Linux uses `.venv/bin/python`. Activate the environment before running examples.
 Native operations additionally require Virtuoso Bridge, Virtuoso, and accessible
-technology and masters. See the [GUI guide](../ui/README.md).
+technology and masters. Bridge is not installed by this project's dependency
+metadata. Follow [Bridge integration](../runtime/BRIDGE.md) to install it in the
+same environment and verify the CIW connection before native work.
 
 ## Source and testing
 
