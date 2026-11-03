@@ -159,6 +159,9 @@ procedure(ALDRuntimeInstall()
   unless(ALDRuntimeMenu->aldBrowser
     hiInsertMenuItem(ALDRuntimeMenu
       hiCreateMenuItem(?name 'aldBrowser ?itemText "History && Changes..." ?callback "ALDGUIBrowser()") 0))
+  unless(ALDRuntimeMenu->aldMerge
+    hiInsertMenuItem(ALDRuntimeMenu
+      hiCreateMenuItem(?name 'aldMerge ?itemText "Merge branches..." ?callback "ALDGUIEnqueue(list(\"merge-setup\"))") 0))
   unless(boundp('ALDRuntimeExitRegistered)
     regExitAfter('ALDRuntimeExit) ALDRuntimeExitRegistered=t)
   t)

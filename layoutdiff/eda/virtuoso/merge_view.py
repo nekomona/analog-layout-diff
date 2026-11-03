@@ -27,7 +27,7 @@ class MergeView:
     def build(self, snapshot):
         w = self.worker
         snapshot = self.display_snapshot(snapshot)
-        with w.work_area() as area:
+        with w.work_area(independent=True) as area:
             lib = w.temporary_library(snapshot['objects']['cell:']['technology'])
             adapter = VirtuosoAdapter(w.client, area['path'], writable_library=lib)
             token = uuid.uuid4().hex

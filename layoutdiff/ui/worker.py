@@ -147,6 +147,7 @@ class GuiWorker:
         checked(self.client.load_il((Path(__file__).parent / "skill" / "gui.il")))
         checked(self.client.load_il((Path(__file__).parent / "skill" / "browser.il")))
         checked(self.client.load_il((Path(__file__).parents[1] / "eda" / "virtuoso" / "skill" / "merge.il")))
+        checked(self.client.load_il((Path(__file__).parents[1] / "eda" / "virtuoso" / "skill" / "merge_repository.il")))
         self.execute("when(ALDGUIOwner ALDGUIStop(ALDGUIOwner))")
         self.execute(f"ALDGUIOwner={sk(self.token)} ALDGUIQueue=nil ALDGUIInstallQuickKey() ALDGUIAttachAll()")
         atomic_json(self.root / "worker.json", {"pid": os.getpid(), "session": self.token,
@@ -187,8 +188,18 @@ class GuiWorker:
         self.execute(f"ALDGUINotice({sk(field_text(message, limit=6000))})")
 
     @contextlib.contextmanager
-    def work_area(self):
+    def work_area(self, *, independent=False):
         from layoutdiff.runtime.workspace import allocate, new_session
+        if self.active_work and independent:
+            outer = self.active_work
+            self.active_work = None
+            try:
+                with self.work_area() as area:
+                    yield area
+            finally:
+                self.active_work = outer
+                self.execute(f'ALDGUIActiveLease={sk(outer["token"])}')
+            return
         if self.active_work:
             yield self.active_work
             return
@@ -733,6 +744,10 @@ class GuiWorker:
                 return self.merge_controller.action(*args)
             if command == 'merge-resume' and len(args) == 1:
                 return self.merge_controller.open(args[0])
+            if command == 'merge-setup' and not args:
+                return self.merge_controller.setup()
+            if command == 'merge-repository' and len(args) == 3:
+                return self.merge_controller.repository_action(*args)
             raise ValueError('Unknown merge request')
         if command in {"backend-info", "backend-config"}:
             from layoutdiff.data.acceleration import info

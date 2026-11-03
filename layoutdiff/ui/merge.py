@@ -18,6 +18,9 @@ class MergeController:
         self.root = worker.root / 'merges'
         self.root.mkdir(exist_ok=True)
         self.opened = {}
+        self.repositories = worker.root / 'merge-repositories'
+        self.repositories.mkdir(exist_ok=True)
+        self.pending_commit = None
 
     def start(self, base, target, incoming, *, metadata=None):
         token = uuid.uuid4().hex
@@ -220,10 +223,133 @@ class MergeController:
         # Repository integration installs a coordinator; file-only sessions retain
         # the validated snapshot and require an explicit destination transaction.
         state = self.opened[token]
-        handler = getattr(self, 'repository_finish', None)
-        if handler:
-            return handler(token)
         session = state['session']
+        if session.metadata.get('repository'):
+            from layoutdiff.git.merge import RepositoryMerge
+            tx = RepositoryMerge(session.metadata['repository'])
+            tx.validate_cell(session.metadata['cell_key'], digest(session.snapshot))
+            self.repository_panel(tx.path.name)
+            self.worker.notice('Cell validated for this merge. Complete the other cells, then Commit step in the Merge repository panel.')
+            return {'validated': digest(session.snapshot), 'repository': str(tx.path)}
         atomic_json(session.path / 'validated-result.json', session.snapshot)
         self.worker.notice('Merge result validated and saved. This session has no Git transaction attached.')
         return {'validated': digest(session.snapshot), 'path': str(session.path / 'validated-result.json')}
+
+    def setup(self):
+        from layoutdiff.git.commit import git, revision
+        repo = self.worker.git_repository()
+        if repo is None:
+            raise ValueError('Select a Git repository with Save & Commit before starting a merge')
+        branch = revision(repo)['branch'].removeprefix('refs/heads/')
+        refs = git(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes').stdout.decode().splitlines()
+        rows = []
+        for p in sorted(self.repositories.glob('*/repository.json')):
+            from layoutdiff.data.history import read_json
+            s = read_json(p)
+            if s['phase'] not in {'published', 'cancelled'}:
+                rows.append([p.parent.name, s['phase'], s['original']['branch']])
+        self.worker.execute(f'ALDMergeSetup({sk(str(repo))} {sk(branch)} {sk(refs)} {sk(rows[-100:])})')
+        return {'repository': str(repo), 'sessions': len(rows)}
+
+    def repository(self, token):
+        from layoutdiff.git.merge import RepositoryMerge
+        if not re.fullmatch('[0-9a-f]{32}', token):
+            raise ValueError('Invalid repository merge ID')
+        return RepositoryMerge(self.repositories / token)
+
+    def repository_panel(self, token):
+        tx = self.repository(token)
+        s = tx.state
+        cells = [[k, ' / '.join(c['identity']), 'validated' if c['validated'] else 'needs review']
+                 for k, c in s['cells'].items()]
+        files = [[p, choice or 'unresolved'] for p, choice in s['files'].items()]
+        text = (f'Target: {s["original"]["branch"]}\nPhase: {s["phase"]}; step {min(s["step"]+1,len(s["incoming"]))}/{len(s["incoming"])}\n'
+                + 'Incoming order: ' + ' -> '.join(v['label'] for v in s['incoming']) +
+                f'\n{len(s.get("paths", []))} affected repository paths; {len(cells)} layout cells; {len(files)} ordinary-file conflicts.\n'
+                'Commit step creates an isolated two-parent commit. Publish fast-forwards the original clean checkout. OA layouts are unchanged.')
+        # Complete affected paths remain available on disk; only bounded rows
+        # enter the native forms. Paging is handled by repository navigation.
+        self.worker.execute(f'ALDMergeRepository({sk(token)} {sk(text)} {sk(cells[:100])} {sk(files[:100])})')
+        return {'token': token, 'phase': s['phase'], 'cells': len(cells), 'files': len(files)}
+
+    def repository_action(self, action, token='', value=''):
+        from layoutdiff.git.merge import RepositoryMerge
+        if action == 'start':
+            incoming = value.replace(',', ' ').split()
+            token = uuid.uuid4().hex
+            RepositoryMerge.create(self.repositories / token, self.worker.git_repository(), incoming)
+        elif action == 'resume':
+            tx = self.repository(token)
+            if tx.state['phase'] == 'committing':
+                tx.recover_commit()
+        elif action == 'open-cell':
+            tx = self.repository(token)
+            session = tx.cell(value)
+            for existing, state in list(self.opened.items()):
+                if state['session'].path == session.path:
+                    self.worker.execute(f'hiSetCurrentWindow(ALDMergeSessions[{sk(existing)}][\'window])')
+                    return {'token': existing}
+            return self.open(uuid.uuid4().hex, session)
+        elif action == 'file':
+            path, side = value
+            self.repository(token).choose_file(path, side)
+        elif action == 'commit':
+            tx = self.repository(token)
+            if any(c['audits'] or tx.cell(k).state.get('omissions') for k,c in tx.state['cells'].items()):
+                self.pending_commit = {'token': token, 'message': value, 'phase': 1,
+                    'stamp': self.repository_stamp(tx)}
+                self.repository_omission_prompt(token, 1)
+                return {'omission_confirmation': 1}
+            self.commit_repository_step(tx, value)
+        elif action in {'omit-continue', 'omit-confirm'}:
+            pending = self.pending_commit
+            phase = 1 if action == 'omit-continue' else 2
+            if not pending or pending['token'] != token or pending['phase'] != phase:
+                raise ValueError('Repository omission confirmation is stale')
+            if phase == 1:
+                pending['phase'] = 2
+                self.repository_omission_prompt(token, 2)
+                return {'omission_confirmation': 2}
+            tx = self.repository(token)
+            self.pending_commit = None
+            if self.repository_stamp(tx) != pending['stamp']:
+                raise ValueError('Merge decisions changed after omission consent; review again')
+            self.commit_repository_step(tx, pending['message'], omission_consent=True)
+        elif action == 'omit-cancel':
+            self.pending_commit = None
+        elif action == 'publish':
+            tx = self.repository(token)
+            result = tx.publish()
+            self.worker.notice('Published Git merge ' + result + '. Use History > Restore checkpoint separately to update an OA source layout.')
+        elif action == 'cancel':
+            tx = self.repository(token)
+            self.close_repository_views(tx)
+            tx.cancel()
+        elif action == 'refresh':
+            pass
+        else:
+            raise ValueError('Unknown repository merge action')
+        return self.repository_panel(token)
+
+    def repository_stamp(self, tx):
+        return digest([tx.state, {k: tx.cell(k).head for k in tx.state['cells']}])
+
+    def repository_omission_prompt(self, token, phase):
+        text = ('This merge includes incomplete snapshots. Their omission diagnostics will be preserved.\n'
+                'Restoring the merged checkpoint WILL LOSE the omitted elements.\n'
+                + ('Continue to the second confirmation?' if phase == 1 else 'Confirm this loss to create the merge commit.'))
+        self.worker.execute(f'ALDMergeRepositoryOmissions({sk(token)} {phase} {sk(text)})')
+
+    def close_repository_views(self, tx):
+        for token, state in list(self.opened.items()):
+            if state['session'].metadata.get('repository') == str(tx.path):
+                state['view'].close()
+                self.opened.pop(token)
+
+    def commit_repository_step(self, tx, message, **kwargs):
+        # Never discard active native work or an unaccepted graphical preview.
+        for state in self.opened.values():
+            if state['session'].metadata.get('repository') == str(tx.path) and (state['view'].editing or state['preview']):
+                raise ValueError('Accept or cancel every native edit and preview before committing')
+        tx.commit_step(message, **kwargs)
+        self.close_repository_views(tx)

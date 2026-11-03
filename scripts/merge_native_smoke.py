@@ -30,12 +30,16 @@ def main():
     # Existing runtime helpers are required; do not reload/stop another worker.
     assert checked(c.execute_skill("boundp('ALDGUIWindows)")) == 't', 'Load the Layout Diff runtime first'
     checked(c.load_il(root / 'layoutdiff/eda/virtuoso/skill/merge.il'))
+    checked(c.load_il(root / 'layoutdiff/eda/virtuoso/skill/merge_repository.il'))
     def call(expr):
-        result = c.execute_skill(expr, timeout=60)
+        result = c.execute_skill('progn(' + expr + ')', timeout=60)
         if result.warnings:
             raise RuntimeError(result.warnings)
         return checked(result)
     try:
+        call('ALDMergeSetup("synthetic repository" "target" list("target" "incoming") nil)')
+        call(f'ALDMergeRepository({sk(token)} "Synthetic merge repository" '
+             'list(list("cell" "TEST/example/layout" "needs review")) list(list("notes.txt" "unresolved")))')
         call(f'ALDMergeOpen({sk(token)} {sk(lib)} "result" 0 "Native merge shell test")')
         call(f'ALDMergeUpdate({sk(token)} 1 {sk([["C001", args.layer + " shapes", "unresolved"]])} '
              '"1 unresolved" "Both branches moved this rectangle. Preview a branch, then accept.")')
@@ -49,6 +53,8 @@ def main():
     finally:
         if not args.keep_open:
             call(f'ALDMergeClose({sk(token)} t)')
+            call("when(boundp('ALDMergeSetupForm) && ALDMergeSetupForm hiFormCancel(ALDMergeSetupForm)) "
+                 "when(boundp('ALDMergeRepositoryForm) && ALDMergeRepositoryForm hiFormCancel(ALDMergeRepositoryForm))")
             c.library.delete(lib)
     print('Test library:', lib)
 

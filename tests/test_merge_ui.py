@@ -131,3 +131,31 @@ def test_edit_after_omission_preview_invalidates_consent(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match='changed after omission'):
         c.action(token, 0, 'omit-confirm')
     assert c.opened[token]['session'].generation == 0 and v.editing
+
+
+def test_repository_flow_routes_native_validation_before_git_commit(monkeypatch, tmp_path):
+    from test_repository_merge import branches
+    from layoutdiff.git.merge import resolve
+    repo, target, incoming = branches(tmp_path)
+    monkeypatch.setattr('layoutdiff.ui.merge.MergeView', View)
+    worker = Worker(tmp_path)
+    worker.git_repository = lambda: repo
+    c = MergeController(worker)
+    result = c.repository_action('start', value='incoming')
+    token = result['token']
+    tx = c.repository(token)
+    for key in tx.state['cells']:
+        opened = c.repository_action('open-cell', token, key)
+        native = opened['token']
+        session = c.opened[native]['session']
+        for ident in session.unresolved():
+            c.action(native, session.generation, 'select', ident)
+            c.action(native, session.generation, 'preview', 'incoming')
+            c.action(native, session.generation, 'accept')
+        c.action(native, session.generation, 'finish')
+    c.repository_action('file', token, ['notes.txt', 'incoming'])
+    c.repository_action('commit', token, 'Merge graphical decisions')
+    assert resolve(repo, 'HEAD') == target
+    assert not c.opened
+    c.repository_action('publish', token)
+    assert resolve(repo, 'HEAD') != target

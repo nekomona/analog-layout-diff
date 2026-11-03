@@ -454,6 +454,7 @@ procedure(ALDGUIAttach(win)
             ?toolTip strcat("Save layout and preview a Git commit. Shortcut: " or(ALDGUIQuickKey "none available"))
             ?callback sprintf(nil "ALDGUIQuickSave(window(%d))" n))
           hiCreateAction(?name 'aldHistory ?iconText "History" ?callback sprintf(nil "ALDGUIHistory(window(%d))" n))
+          hiCreateAction(?name 'aldMerge ?iconText "Merge" ?callback "ALDGUIEnqueue(list(\"merge-setup\"))")
           hiCreateAction(?name 'aldRuntime ?iconText "Runtime" ?callback "ALDRuntimePanel()")
           hiCreateAction(?name 'aldStatus ?iconText "Ready" ?enabled nil ?callback "t")))
       state=makeTable('aldWindowState nil) state['toolbar]=bar state['commitToolbar]=bar
