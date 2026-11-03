@@ -43,7 +43,7 @@ def remap(record, mapping):
     return result
 
 
-def materialize(records):
+def materialize(records, *, with_mapping=False):
     """Re-key anonymous records and links in dependency order, preserving counts."""
     graph = {key: {ref for ref in references(r) if not ref.startswith('@')}
              for key, r in records.items()}
@@ -65,7 +65,8 @@ def materialize(records):
             output.append(r)
     except CycleError as exc:
         raise ValueError('Cyclic merged references') from exc
-    return canonicalize(output)
+    result = canonicalize(output)
+    return (result, mapped) if with_mapping else result
 
 
 def _three(b, t, i):
@@ -203,6 +204,7 @@ class MergePlan:
         for keys in mpps.values():
             if set(keys) & changed.keys():
                 union(keys)
+        mpp_keys = set().union(*mpps.values()) if mpps else set()
         # Ordered groups and multi-figure pins form compound decisions. A field
         # merge must not leave duplicate ordinals or two primary pin figures.
         compounds = defaultdict(set)
@@ -241,7 +243,7 @@ class MergePlan:
                 continue
             alternatives = {s: {k: self.records[s][k] for k in keys if k in self.records[s]} for s in SIDES}
             combined, reasons = {}, []
-            if any(set(keys) & members for members in mpps.values()):
+            if mpp_keys.intersection(keys):
                 b, t, i = (alternatives[s] for s in SIDES)
                 if t != b and i != b and t != i:
                     reasons.append('coupled MPP recipe and generated members')

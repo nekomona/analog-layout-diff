@@ -42,13 +42,53 @@ independently of unrelated worktree/index edits. Cell history filters commits by
 the chosen cellview. Repository history can select branches/tags and changed cells.
 Externally created multi-cell or merge commits can be browsed; merges compare
 with their first parent. Deleted snapshots remain reviewable through a revision
-where they exist. Branch creation and automatic layout merging are outside the GUI.
+where they exist. Branch creation remains outside the GUI. Graphical branch
+integration is described below.
 
 The reader also accepts single-file v1 snapshots and embedded operation-chain
 snapshot blobs. A confirmed commit can adopt the directory representation in one
 ordinary Git transaction. `migrate-v2 REPO LIB CELL` performs explicit conversion;
 conflicting coexisting formats fail validation. Existing Git revisions are retained.
 Standalone runtime chains are read-only GUI inputs; GUI commits write Git snapshots.
+
+## Graphical branch integration
+
+**CIW > Layout Diff > Merge branches...** starts a transaction from the selected
+repository's current attached branch. Incoming refs are pinned to commit IDs in
+the entered order. Each incoming branch is integrated with a separate two-parent
+commit; already-integrated ancestors are skipped. A unique common ancestor is
+required. Unrelated histories and multiple merge bases are refused.
+
+The transaction creates a detached linked worktree in system temporary storage.
+Git merges ordinary paths there. Every affected managed cell, including changes
+on only one side, is reconstructed and validated through the native merge editor.
+Managed snapshot bundles are regenerated from those decisions. Git's textual
+merge output is never authoritative for layout records. Ordinary-file conflicts
+have Base/Target/Incoming choices, a patch viewer, and an explicit resolution
+requirement. **All affected paths** includes automatically merged ordinary files.
+Embedded legacy history bundles must be migrated before branch integration.
+
+**Commit step** uses normal `git commit`, including hooks/signing. The resulting
+tree must match the validated index and have the expected two parents. A hook
+that changes that tree prevents publication. **Publish to target** separately
+fast-forwards the original clean checkout, after checking its branch and HEAD.
+Neither action replaces an OA source cell or pushes a remote. Native replacement
+uses the existing explicit checkpoint-restore flow.
+
+Decisions and transaction state persist below the runtime's `merges` and
+`merge-repositories` directories. Suspended Git worktrees remain in system temp,
+outside a runtime session's disposable TMPDIR. An internal Git ref protects
+prepared commits. Resume recovers interrupted preparation, commit and publication
+when their pinned state can be verified. Unexpected external changes stop the
+transaction for inspection. Completed or explicitly cancelled transactions remove
+their linked worktrees and internal refs; decision journals remain as local audits.
+
+Incomplete source snapshots retain their diagnostic reports in the merged bundle.
+Commit requires two loss confirmations, including after manual edits introduce
+unsupported content. These reports are conservative inherited diagnostics, not a
+replayable archive. Removing a whole incomplete cell is refused while its omission
+audit needs preservation. Explicitly ignored routes, markers and Steiners remain
+ignored.
 
 ## Semantic text conversion
 
@@ -81,5 +121,6 @@ when exporting a directory snapshot with omission sidecars. See
 | --- | --- |
 | [store.py](../../layoutdiff/git/store.py) | Immutable snapshot discovery and reads |
 | [commit.py](../../layoutdiff/git/commit.py) | Preview, stale checks, isolated commit and rollback |
+| [merge.py](../../layoutdiff/git/merge.py) | Pinned branch preparation, cell validation, two-parent commits and publication |
 | [tools.py](../../layoutdiff/git/tools.py) | Local setup, extraction and semantic textconv |
 | [driver.py](../../layoutdiff/git/driver.py) | Textconv executable entry |

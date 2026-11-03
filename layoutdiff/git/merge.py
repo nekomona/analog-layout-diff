@@ -34,6 +34,15 @@ def changed(repo, a, b):
     return [p for p in git(repo, 'diff', '--name-only', '--no-renames', '-z', a, b).stdout.decode().split('\0') if p]
 
 
+def scratch_root():
+    """Resumable Git worktrees must outlive a runtime's disposable TMPDIR."""
+    root = Path(tempfile.gettempdir()).resolve()
+    for parent in (root, *root.parents):
+        if parent.name.startswith('ald-session-'):
+            return parent.parent
+    return root
+
+
 class RepositoryMerge:
     @classmethod
     def create(cls, path, repo, incoming):
@@ -49,7 +58,7 @@ class RepositoryMerge:
         pinned = [{'label': ref, 'sha': resolve(repo, ref)} for ref in incoming]
         git(repo, 'var', 'GIT_AUTHOR_IDENT'); git(repo, 'var', 'GIT_COMMITTER_IDENT')
         path.mkdir(parents=True, exist_ok=False)
-        work = Path(tempfile.mkdtemp(prefix='ald-merge-git-')).resolve() / 'tree'
+        work = Path(tempfile.mkdtemp(prefix='ald-merge-git-', dir=scratch_root())).resolve() / 'tree'
         state = {'schema': 'layoutdiff-repository-merge/1', 'repo': str(repo), 'original': original,
                  'incoming': pinned, 'step': 0, 'head': original['head'], 'worktree': str(work),
                  'phase': 'created', 'commits': [], 'cells': {}, 'files': {},
@@ -74,8 +83,10 @@ class RepositoryMerge:
     def begin(self):
         """Prepare one pinned branch at a time, keeping earlier parents visible."""
         s = self.state
-        if s['phase'] not in {'created', 'between'}:
+        if s['phase'] not in {'created', 'between', 'preparing'}:
             raise ValueError('This merge step is already prepared')
+        if s['phase'] == 'created' and not self.work.exists():
+            git(self.repo, 'worktree', 'add', '--detach', str(self.work), s['head'])
         while s['step'] < len(s['incoming']):
             incoming = s['incoming'][s['step']]['sha']
             if git(self.repo, 'merge-base', '--is-ancestor', incoming, s['head'], check=False).returncode == 0:
@@ -101,13 +112,17 @@ class RepositoryMerge:
                 raise ValueError('Layout identities collide on a case-insensitive filesystem')
             s.update(base=base, phase='preparing', cells={}, files={}, paths=paths)
             self.save()
-            result = git(self.work, 'merge', '--no-ff', '--no-commit', incoming, check=False)
             merge_head = git(self.work, 'rev-parse', '--verify', 'MERGE_HEAD', check=False)
+            if merge_head.returncode:
+                result = git(self.work, 'merge', '--no-ff', '--no-commit', incoming, check=False)
+                merge_head = git(self.work, 'rev-parse', '--verify', 'MERGE_HEAD', check=False)
+            else:
+                result = merge_head
             if merge_head.returncode or merge_head.stdout.decode().strip() != incoming:
                 raise RuntimeError('Git did not prepare the expected merge: ' + result.stderr.decode(errors='replace'))
             for identity in sorted(identities):
                 key = digest(identity)
-                folder = self.path / ('step-' + str(s['step'])) / key
+                folder = self.path / ('step-' + str(s['step'])) / (key + '-' + uuid.uuid4().hex[:8])
                 store = GitSnapshots(self.repo, identity, revision=s['head'])
                 try:
                     snapshots = [store.snapshot(r) for r in (base, s['head'], incoming)]
@@ -176,6 +191,11 @@ class RepositoryMerge:
             folder /= part
             if folder.is_symlink():
                 raise ValueError('Managed layout path contains a symlink')
+        if git(self.work, 'ls-files', '--others', '--exclude-standard', '-z', '--', prefix).stdout:
+            raise ValueError('Unexpected untracked files in the managed bundle')
+        for path in git(self.work, 'ls-files', '-z', '--', prefix).stdout.decode().split('\0'):
+            if path and path_identity(path) != identity:
+                raise ValueError('Unexpected tracked file in the managed bundle: ' + path)
         git(self.work, 'rm', '-r', '-f', '--ignore-unmatch', '--', prefix, snapshot_path(identity))
         audits = list(cell['audits'])
         manual = session.state.get('omissions')
@@ -244,6 +264,9 @@ class RepositoryMerge:
         if s['phase'] != 'committing':
             raise ValueError('No interrupted commit to recover')
         result = resolve(self.work, 'HEAD')
+        if result == s['head']:
+            s['phase'] = 'resolving'; self.save()
+            return None
         parents = git(self.work, 'show', '-s', '--format=%P', result).stdout.decode().split()
         incoming = s['incoming'][s['step']]['sha']
         if parents != [s['head'], incoming]:
@@ -264,9 +287,27 @@ class RepositoryMerge:
         if revision(self.repo) != s['original']:
             raise ValueError('Target branch advanced or changed; publication is stale')
         clean(self.repo)
-        git(self.repo, 'merge', '--ff-only', '--no-edit', s['head'])
-        s['phase'] = 'published'; self.save()
-        self.cleanup()
+        s['phase'] = 'publishing'; self.save()
+        try:
+            git(self.repo, 'merge', '--ff-only', '--no-edit', s['head'])
+        except BaseException:
+            if revision(self.repo) == s['original']:
+                s['phase'] = 'ready'; self.save()
+            raise
+        return self.recover_publish()
+
+    def recover_publish(self):
+        s = self.state
+        if s['phase'] != 'publishing':
+            raise ValueError('No publication to recover')
+        current = revision(self.repo)
+        if current == s['original']:
+            s['phase'] = 'ready'; self.save()
+            return None
+        if current != {'branch': s['original']['branch'], 'head': s['head']}:
+            raise ValueError('Publication state changed; inspect the target checkout')
+        clean(self.repo)
+        s['phase'] = 'published'; self.save(); self.cleanup()
         return s['head']
 
     def cleanup(self):
@@ -276,7 +317,7 @@ class RepositoryMerge:
         if self.work.exists():
             # Git verifies that this is a registered linked worktree.
             git(self.repo, 'worktree', 'remove', '--force', str(self.work))
-        if self.work.parent.name.startswith('ald-merge-git-'):
+        if self.work.parent.exists() and self.work.parent.name.startswith('ald-merge-git-'):
             self.work.parent.rmdir()
         git(self.repo, 'update-ref', '-d', self.state['ref'])
 

@@ -1,12 +1,44 @@
 ; Native graphical merge workspace. Callbacks only enqueue versioned requests.
 ; Result and alternative cells are session-owned; source layouts are never opened for edit.
 unless(boundp('ALDMergeSessions) ALDMergeSessions=makeTable('aldMergeSessions nil))
+unless(boundp('ALDMergeLeases) ALDMergeLeases=makeTable('aldMergeLeases nil))
+unless(boundp('ALDMergeMissing) ALDMergeMissing=makeTable('aldMergeMissing 0))
+unless(boundp('ALDMergeWatchTimer) ALDMergeWatchTimer=nil)
+unless(boundp('ALDMergeAnimationSerial) ALDMergeAnimationSerial=0)
+
+procedure(ALDMergeHold(token lease)
+  ALDGUILeases[lease]['hold]=t
+  ALDMergeLeases[token]=cons(lease ALDMergeLeases[token])
+  ALDMergeMissing[token]=0
+  unless(ALDMergeWatchTimer ALDMergeWatchTimer=t hiRegTimer("ALDMergeWatch()" 10)))
+
+procedure(ALDMergeRelease(token lease)
+  when(ALDGUILeases[lease] ALDGUILeases[lease]['hold]=nil)
+  ALDMergeLeases[token]=remove(lease ALDMergeLeases[token]))
+
+procedure(ALDMergeWatch()
+  let((s pending)
+    ALDMergeWatchTimer=nil
+    foreach(token ALDMergeLeases
+      when(ALDMergeLeases[token]
+        s=ALDMergeSessions[token]
+        if(s then
+          unless(member(s['window] hiGetWindowList()) ALDMergeClose(token))
+        else
+          ALDMergeMissing[token]=ALDMergeMissing[token]+1
+          when(ALDMergeMissing[token]>120 ALDMergeClose(token)))
+        when(ALDMergeLeases[token] pending=t)))
+    when(pending ALDMergeWatchTimer=t hiRegTimer("ALDMergeWatch()" 10))))
 
 procedure(ALDMergeRequest(token action @optional (value ""))
   let((s)
     s=ALDMergeSessions[token]
     when(s && !s['loading]
       ALDGUIEnqueue(list("merge-action" token s['generation] action value)))))
+
+procedure(ALDMergeAlive(token)
+  let((s) s=ALDMergeSessions[token]
+    when(s && member(s['window] hiGetWindowList()) t)))
 
 procedure(ALDMergeSelect(form)
   when(!form->aldUpdating && form->aldConflicts->value
@@ -26,12 +58,12 @@ procedure(ALDMergePick(token)
       enterPoint(?prompts list("Select a merge conflict or alternative. Escape cancels.")
         ?doneProc "ALDMergePickDone" ?cmdName "Layout Diff Merge Pick"))))
 
-procedure(ALDMergeClose(token @optional (closeEditor nil))
+procedure(ALDMergeClose(token @optional (closeEditor nil) (keepLeases nil))
   let((s)
     s=ALDMergeSessions[token]
     when(s
-      foreach(hl s['highlights] geDeleteHilightSet(hl))
-      foreach(dw s['docks] hiCloseWindow(dw))
+      foreach(hl s['highlights] errset(geDeleteHilightSet(hl) nil))
+      foreach(dw s['docks] when(member(dw hiGetWindowList()) hiCloseWindow(dw)))
       foreach(field '(navigation decision details)
         when(s[field] hiDeleteForm(s[field])))
       when(closeEditor && member(s['window] hiGetWindowList())
@@ -41,33 +73,52 @@ procedure(ALDMergeClose(token @optional (closeEditor nil))
             ; Save only this disposable cell to avoid a close-time modal prompt.
             when(dbIsCellViewModified(cv) dbSave(cv))
             hiCloseWindow(s['window]))))
-      ALDMergeSessions[token]=nil)))
+      ALDMergeSessions[token]=nil)
+    unless(keepLeases
+      foreach(lease ALDMergeLeases[token] when(ALDGUILeases[lease] ALDGUILeases[lease]['hold]=nil))
+      ALDMergeLeases[token]=nil)))
 
 procedure(ALDMergeOpen(token lib cell generation summary)
-  let((s win session form fields rows detail choice status bar dw n action fields2 form2)
+  let((s win session form fields rows detail choice status bar dw n action fields2 form2 visible blink filter frameBox)
+    s=ALDMergeSessions[token]
+    frameBox=if(s && member(s['window] hiGetWindowList()) then
+      hiGetAbsWindowScreenBBox(s['window] t) else list(20:20 1420:920))
     win=deOpenCellView(lib cell "layout" "maskLayout" nil "r")
     unless(win error("Cannot open merge result"))
+    hiResizeWindow(win frameBox)
     session=hiGetSessionWindow(win)
     unless(session error("A Virtuoso session window is required for merge panels"))
-    ALDMergeClose(token t)
+    s=ALDMergeSessions[token]
+    visible=if(s then s['visible] else list(t t t)) blink=when(s s['blink])
+    ALDMergeClose(token t t)
     n=win~>windowNum s=makeTable('aldMerge nil)
     s['window]=win s['generation]=generation s['docks]=nil s['highlights]=nil
-    s['library]=lib s['cell]=cell s['visible]=list(t t t) s['blink]=nil s['phase]=t
+    s['library]=lib s['cell]=cell s['visible]=visible s['blink]=blink s['phase]=t
+    ALDMergeAnimationSerial=ALDMergeAnimationSerial+1 s['animation]=ALDMergeAnimationSerial
     ALDMergeSessions[token]=s win->aldMergeToken=token
     ; Prevent ordinary Save & Commit from treating the temporary result as a source.
     ALDGUIAttach(win) ALDGUIWindows[win]['expiredReview]=t
     rows=hiCreateReportField(?name 'aldConflicts ?title "MERGE DECISIONS" ?selectMode 'single
-      ?headers '(("ID" 70 left string nil) ("Category" 145 left string nil) ("State" 85 left string nil))
+      ?headers '(("ID" 0 left string nil) ("Category" 110 left string nil) ("State" 75 left string nil))
       ?choices nil ?callback sprintf(nil "ALDMergeSelect(%s)" concat("aldMergeNav" n)))
-    status=hiCreateMLTextField(?name 'aldStatus ?prompt "" ?editable nil ?value summary)
-    fields=list(list(status 8:8 324:90 0) list(rows 8:106 324:370 0))
-    form=hiCreateAppForm(?name concat("aldMergeNav" n) ?formTitle "Layout Merge"
-      ?fields fields ?buttonLayout 'Empty ?initialSize list(340 490))
+    status=hiCreateMLTextField(?name 'aldStatus ?prompt "" ?editable nil ?value summary ?enableWordWrap t ?hasHorizontalScrollbar nil)
+    filter=hiCreateCyclicField(?name 'aldCategory ?prompt "Category" ?choices list("All")
+      ?callback sprintf(nil "unless(%s->aldUpdating ALDMergeRequest(%L \"category\" %s->aldCategory->value))"
+        concat("aldMergeNav" n) token concat("aldMergeNav" n)))
+    fields=list(list(status 8:8 324:90 0) list(filter 8:102 324:28 70) list(rows 8:138 324:300 0)
+      list(hiCreateButton(?name 'aldPagePrevious ?buttonText "Previous page"
+        ?callback sprintf(nil "ALDMergeRequest(%L \"page-previous\")" token)) 8:448 158:30)
+      list(hiCreateButton(?name 'aldPageNext ?buttonText "Next page"
+        ?callback sprintf(nil "ALDMergeRequest(%L \"page-next\")" token)) 174:448 158:30))
+    form=hiCreateLayoutForm(concat("aldMergeNav" n) "Layout Merge"
+      hiCreateVerticalBoxLayout(concat("aldMergeNavLayout" n) ?margins list(8 8 8 8) ?spacing 4 ?scrollable t
+        ?items foreach(mapcar field fields car(field))) ?buttonLayout 'Empty ?initialSize list(340 490))
     form->aldToken=token s['navigation]=form
     dw=hiCreateDockWindow(?appType "form" ?widgetType "form" ?form form
       ?title "Merge navigation" ?dockSizeHint list(350 520))
     hiDockWindow(?window dw ?session session ?side 'left) s['docks]=cons(dw s['docks])
-    detail=hiCreateMLTextField(?name 'aldExplanation ?prompt "" ?editable nil ?value "Select a conflict in the panel or canvas.")
+    detail=hiCreateMLTextField(?name 'aldExplanation ?prompt "" ?editable nil ?enableWordWrap t ?hasHorizontalScrollbar nil
+      ?value "Select a conflict in the panel or canvas.")
     choice=hiCreateCyclicField(?name 'aldChoice ?prompt "Alternative" ?choices list("target" "incoming" "base" "combined" "both"))
     fields2=list(list(detail 8:8 324:170 0) list(choice 8:186 324:28 85))
     foreach(pair '(("Preview" "preview") ("Accept preview" "accept") ("Edit result" "edit")
@@ -75,8 +126,9 @@ procedure(ALDMergeOpen(token lib cell generation summary)
       action=hiCreateButton(?name concat("aldMergeButton" length(fields2)) ?buttonText car(pair)
         ?callback sprintf(nil "ALDMergeRequest(%L %L %s->aldChoice->value)" token cadr(pair) concat("aldMergeDecision" n)))
       fields2=append(fields2 list(list(action list(8 225+36*(length(fields2)-2)) list(324 30)))))
-    form2=hiCreateAppForm(?name concat("aldMergeDecision" n) ?formTitle "Merge decision"
-      ?fields fields2 ?buttonLayout 'Empty ?initialSize list(340 460))
+    form2=hiCreateLayoutForm(concat("aldMergeDecision" n) "Merge decision"
+      hiCreateVerticalBoxLayout(concat("aldMergeDecisionLayout" n) ?margins list(8 8 8 8) ?spacing 4 ?scrollable t
+        ?items foreach(mapcar field fields2 car(field))) ?buttonLayout 'Empty ?initialSize list(340 460))
     form2->aldToken=token s['decision]=form2
     dw=hiCreateDockWindow(?appType "form" ?widgetType "form" ?form form2
       ?title "Decision and result" ?dockSizeHint list(350 500))
@@ -94,14 +146,24 @@ procedure(ALDMergeOpen(token lib cell generation summary)
           ?callback sprintf(nil "ALDMergeRequest(%L %L)" token cadr(pair))))))
     hiPlaceToolbar(win bar 'top)
     s['toolbar]=bar
+    when(s['blink] ALDMergeAnimate(token t s['animation]))
     hiZoomIn(win win->displayCellView~>bBox)
     win))
+
+procedure(ALDMergeCategories(token categories selected)
+  let((s form)
+    s=ALDMergeSessions[token]
+    when(s
+      form=s['navigation] form->aldUpdating=t
+      form->aldCategory->choices=cons("All" categories) form->aldCategory->value=selected
+      form->aldUpdating=nil)))
 
 procedure(ALDMergeUpdate(token generation rows summary explanation)
   let((s form)
     s=ALDMergeSessions[token]
     when(s
       s['generation]=generation form=s['navigation] form->aldUpdating=t
+      s['summary]=summary
       form->aldConflicts->choices=rows form->aldStatus->value=summary
       s['decision]->aldExplanation->value=explanation form->aldUpdating=nil)))
 
@@ -109,7 +171,7 @@ procedure(ALDMergeBusy(token message)
   let((s)
     s=ALDMergeSessions[token]
     when(s s['loading]=(message!="")
-      when(message!="" s['navigation]->aldStatus->value=strcat("Loading: " message)))))
+      s['navigation]->aldStatus->value=if(message!="" then strcat("Loading: " message) else or(s['summary] "Ready")))))
 
 procedure(ALDMergeDraw(token entries)
   let((s hl box)
@@ -122,7 +184,7 @@ procedure(ALDMergeDraw(token entries)
       s['highlights]=append(s['highlights] list(hl))
       foreach(primitive cadr(entry) ALDGUIDrawShadow(hl primitive))
       hl->enable=t)
-    hiRedraw(s['window]) t))
+    ALDMergeAnimate(token nil) t))
 
 procedure(ALDMergeZoom(token box)
   let((s pad)
@@ -153,17 +215,19 @@ procedure(ALDMergeToggle(token index)
 procedure(ALDMergeBlink(token)
   let((s)
     s=ALDMergeSessions[token]
-    when(s s['blink]=!s['blink] s['phase]=t ALDMergeAnimate(token t))))
+    when(s
+      ALDMergeAnimationSerial=ALDMergeAnimationSerial+1 s['animation]=ALDMergeAnimationSerial
+      s['blink]=!s['blink] s['phase]=t ALDMergeAnimate(token t s['animation]))))
 
-procedure(ALDMergeAnimate(token scheduled)
+procedure(ALDMergeAnimate(token scheduled @optional generation)
   let((s n)
     s=ALDMergeSessions[token]
-    when(s && member(s['window] hiGetWindowList())
+    when(s && member(s['window] hiGetWindowList()) && (!scheduled || generation==s['animation])
       when(scheduled && s['blink] s['phase]=!s['phase])
       n=0 foreach(hl s['highlights]
         hl->enable=nth(n s['visible]) && (!s['blink] || s['phase]) n=n+1)
       hiRedraw(s['window])
-      when(scheduled && s['blink] hiRegTimer(sprintf(nil "ALDMergeAnimate(%L t)" token) 5)))))
+      when(scheduled && s['blink] hiRegTimer(sprintf(nil "ALDMergeAnimate(%L t %d)" token generation) 5)))))
 
 procedure(ALDMergeDetails(token text)
   let((s field form dw)

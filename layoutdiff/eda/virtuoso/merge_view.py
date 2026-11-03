@@ -17,6 +17,7 @@ class MergeView:
         self.alternatives = {}
         self.packets = {}
         self.editing = False
+        self.index = None
 
     def display_snapshot(self, snapshot):
         if snapshot['objects']:
@@ -36,13 +37,13 @@ class MergeView:
                                          group_definition_source=self.session.metadata.get('identity'))
             # Helper cells have no editor windows. Hold their leases until their
             # merge workspace releases them, including after the worker stops.
-            w.execute(f'ALDGUILeases[{sk(area["token"])}][\'hold]=t')
+            w.execute(f'ALDMergeHold({sk(self.token)} {sk(area["token"])})')
             return {'library': lib, 'cell': cell, 'token': token, 'lease': area['token'],
                     'actual': actual, 'digest': digest(snapshot), 'warnings': adapter.last_dependency_warnings}
 
     def release(self, native):
         if native:
-            self.worker.execute(f'ALDGUILeases[{sk(native["lease"])}][\'hold]=nil')
+            self.worker.execute(f'ALDMergeRelease({sk(self.token)} {sk(native["lease"])})')
 
     def show(self, snapshot):
         native = self.build(snapshot)
@@ -78,13 +79,16 @@ class MergeView:
         unit = self.session.plan.units[unit_id]
         entries, boxes, warnings = [], [], []
         for side in ('base', 'target', 'incoming'):
-            snapshot = self.session.plan.inputs[side]
+            snapshot, selected, truncated = self.index.projection(side, unit_id)
+            if truncated:
+                warnings.append('Alternative geometry limited to 2000 elements; full result validation remains required')
             if not snapshot['objects']:
+                entries.append([self.packets[side], []])
                 continue
-            if side not in self.alternatives:
-                self.alternatives[side] = self.build(snapshot)
+            if side not in self.alternatives or self.alternatives[side]['unit'] != unit_id:
+                self.release(self.alternatives.pop(side, None))
+                self.alternatives[side] = {**self.build(snapshot), 'unit': unit_id}
             native = self.alternatives[side]
-            selected = [k for k, handle in self.session.plan.maps[side].items() if handle in unit['keys']]
             groups = [k for k in selected if snapshot['objects'][k]['kind'] in {'group', 'figGroup'}]
             figures = [k for k in selected if snapshot['objects'][k]['kind'] in VISUAL]
             shadow = uuid.uuid4().hex

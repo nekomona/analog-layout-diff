@@ -8,9 +8,9 @@ import time
 import uuid
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from virtuoso_bridge import VirtuosoClient
+from virtuoso_bridge import VirtuosoClient, SSHClient
 from layoutdiff.data.history import atomic_json
-from layoutdiff.eda.virtuoso.sexpr import dumps as sk
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 from layoutdiff.eda.virtuoso.adapter import checked
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -19,13 +19,25 @@ PROJECT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", required=True, help="Absolute dedicated runtime path on the Virtuoso host")
+    parser.add_argument('--profile', help='Explicit Bridge profile for the intended CIW')
+    parser.add_argument('--preserve-runtime-settings', action='store_true',
+                        help='Retain this CIW runtime root, launch command and pinned bridge port')
     parser.add_argument("--migrate", action="store_true", help="Stop the old Windows worker and copy its histories/settings once")
     parser.add_argument("--native", choices=("auto", "off", "required"), default="auto", help="Build the optional accelerator when a host C++ compiler is available")
     args = parser.parse_args()
     remote = args.destination.rstrip("/")
     if not remote.startswith("/") or any(x in remote for x in ("\n", "\r", "..")):
         raise ValueError("Expected an absolute dedicated deployment path")
-    c = VirtuosoClient.from_env()
+    if args.profile:
+        tunnel = SSHClient.from_env(profile=args.profile); tunnel.warm()
+        c = VirtuosoClient.from_tunnel(tunnel)
+    else:
+        c = VirtuosoClient.from_env()
+    settings = None
+    if args.preserve_runtime_settings:
+        settings = loads(checked(c.execute_skill('list(ALDRuntimeRoot ALDRuntimeCommand ALDRuntimeBridgePort)')))
+        if remote + '/.venv/bin/python' not in settings[1]:
+            raise ValueError('Existing runtime command belongs to another deployment destination')
     def run(cmd):
         r = c.ssh_runner.run_command(cmd, timeout=240)
         print(r.stdout, flush=True)
@@ -95,11 +107,15 @@ def main():
             " && tar -xzf " + q(remote + "/history-migration.tar.gz") + " -C " + q(remote + "/state"))
     command = ("/usr/bin/env -u LD_LIBRARY_PATH -u LD_PRELOAD " + q(remote + "/.venv/bin/python") +
         " -u -m layoutdiff.runtime supervise --root " + q(remote + "/state"))
+    runtime_root, bridge_port = remote + '/state', None
+    if settings:
+        runtime_root, command, bridge_port = settings
     startup = evidence / "startup.il"
     startup.write_text(
         '; Generated Layout Diff entry point. Load after the existing bridge setup.\n'
-        + 'ALDRuntimeRoot=' + sk(remote + "/state") + '\n'
+        + 'ALDRuntimeRoot=' + sk(runtime_root) + '\n'
         + 'ALDRuntimeCommand=' + sk(command) + '\n'
+        + ('ALDRuntimeBridgePort=' + sk(bridge_port) + '\n' if settings else '')
         + 'load(' + sk(remote + "/app/layoutdiff/ui/skill/workflow.il") + ')\n'
         + 'load(' + sk(remote + "/app/layoutdiff/ui/skill/gui.il") + ')\n'
         + 'load(' + sk(remote + "/app/layoutdiff/ui/skill/runtime.il") + ')\n'

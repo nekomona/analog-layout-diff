@@ -36,6 +36,12 @@ the selected bridge. `--native required` requires a compiler/build; `--native of
 skips the build. The generated startup file can be loaded after bridge setup from
 `.cdsinit` when automatic startup is wanted. Keep generated host paths local.
 
+For an update to an existing CIW, `--profile NAME --preserve-runtime-settings`
+selects that bridge explicitly and retains its runtime root, launch command and
+pinned bridge port. The existing command must belong to the deployment destination.
+The update restarts the plugin worker; accepted merge journals and repository
+settings remain in their existing runtime root.
+
 The optional `--migrate` imports a local `gui-workspace` chain/preferences archive
 and refuses to overwrite host histories. New GUI commits use Git snapshots.
 

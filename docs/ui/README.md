@@ -7,7 +7,7 @@ Use the [CLI guide](CLI.md) for command dependencies and preservation limits.
 
 ## Save and commit
 
-The layout toolbar provides **Save & Commit**, **History** and **Runtime**.
+The layout toolbar provides **Save & Commit**, **History**, **Merge** and **Runtime**.
 Save & Commit saves the edited cellview, previews repository/branch/identity,
 change counts and semantic details, then focuses the commit-message field.
 **Enter** or **OK** commits; **Cancel** leaves the native layout saved.
@@ -84,6 +84,53 @@ create a Git commit; use Save & Commit to record the resulting working state.
 The selected Git checkpoint remains unchanged. See the
 [interaction sequence](INTERACTION_SEQUENCES.md#review-and-restore-interaction).
 
+## Interactive merge editor
+
+Open **Merge** on the layout toolbar or **CIW > Layout Diff > Merge branches...**.
+The target is the selected repository's current branch. Enter incoming branches
+in integration order, or resume an existing session. The repository panel lists
+affected cells and ordinary-file conflicts, with 100-row pages. Open a cell to
+work in its temporary native layout editor.
+
+The left dock lists decisions with a category filter and 50-row pages. Categories
+retain the movement/stretch and modified-net distinctions. **Pick** finds decisions
+at a canvas point; overlapping candidates require an explicit row choice. The
+right dock explains the decision, correspondence evidence and dependencies.
+Base appears in gray, Target in cyan and Incoming in magenta; the Result uses
+normal layout layers. Each branch overlay can be toggled independently, and
+**Blink** animates enabled overlays. Deleted alternatives remain visible as
+prior-state contours. Group-only changes show group boundaries; net-only changes
+show connected figures. Bounding-box fallbacks and overlapping branch changes
+are reported as review hints, not DRC/LVS results.
+
+Choose Target, Incoming, Base, a compatible combination, or Keep Both when the
+objects are independent anonymous figures. **Preview** reconstructs and checks
+the candidate without accepting it. **Accept preview** records the decision.
+**Edit result** enables native layout tools; **Accept edits** captures and verifies
+the result, while **Cancel edits** restores the previous accepted state. Accepted
+manual edits reopen earlier explicit decisions conservatively, since native tools
+can change any part of the cell. **Undo decision** and **Redo decision** operate on
+the persistent journal, independently of native undo history.
+
+The optional serialized preview is a separate dock. **Validate** verifies the
+accepted result; **Finish merge** marks that cell validated for its repository
+transaction. Resolve and validate all cells, then use **Commit step** in the
+repository panel. Continue the selected incoming-branch sequence and finally
+**Publish to target**. See [Git integration](../git/README.md#graphical-branch-integration)
+for publication and recovery behavior. OA source replacement remains a separate
+checkpoint-restore action.
+
+**Suspend** closes disposable native views while retaining accepted decisions.
+Closing an editor also releases its native helper leases; unaccepted edits are
+not journaled. Resume rebuilds from accepted data. Native alternatives are built
+from the selected objects and required dependency closure. A branch overlay is
+limited to 2,000 selected objects and reports truncation; compound dependencies
+can require a larger helper reconstruction. The full Result and final validation
+always contain all records. Merge analysis currently materializes three snapshots
+in Python, so whole-cell reconstruction and validation remain substantial costs
+for large cells. The existing C++ exact-diff backend does not implement three-way
+merge semantics.
+
 ## Unsupported elements and omission audits
 
 Strict native capture/replay rejects unsupported content. Save & Commit offers
@@ -118,5 +165,7 @@ Use **Clean reviews** after closing windows. The
 
 `cli.py` implements commands; `worker.py` coordinates workflows; `browser.py`
 supplies cell/repository models; `restore.py` enforces checkpoint replacement.
-`skill/` contains native forms, callbacks and toolbar integration. See
+`merge.py` coordinates graphical decisions and repository sessions; the native
+merge forms and views live in `eda/virtuoso`. `skill/` contains the other native
+forms, callbacks and toolbar integration. See
 [interaction sequences](INTERACTION_SEQUENCES.md) for cross-package calls.

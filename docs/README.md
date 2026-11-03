@@ -1,6 +1,6 @@
 # Layout Diff documentation
 
-Current release: **0.18.0**, as declared in [pyproject.toml](../pyproject.toml).
+Current release: **0.19.0**, as declared in [pyproject.toml](../pyproject.toml).
 These guides describe the current implementation. Schema and protocol numbers
 identify supported data contracts.
 

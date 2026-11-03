@@ -21,3 +21,28 @@ technology/master definitions and the target Virtuoso version. See the
 [CLI assessment](../ui/CLI.md) for unsupported-data limits.
 Local execution logs, installation snapshots and design measurements belong in
 ignored local storage and do not form part of the public documentation.
+
+## Graphical merge checks
+
+`test_merge.py`, `test_merge_relationships.py`, `test_merge_index.py` and
+`test_merge_ui.py` exercise three-way rules, anonymous ambiguity, compounds,
+reference remapping, journal corruption/staleness, preview boundaries, omission
+consent and bounded navigation. `test_repository_merge.py` uses isolated synthetic
+Git repositories for parent ordering, multi-cell validation, ordinary conflicts,
+stale publication and hook failures.
+
+`scripts/merge_native_smoke.py` verifies docked forms and native controls.
+`scripts/merge_native_regression.py --complex --repository` adds synthetic pins,
+ordered groups, an MPP with associated text, preview/accept/edit/undo/resume,
+native readback and a real isolated Git merge through worker dispatch. Both
+scripts require explicit technology/layer arguments and use disposable libraries.
+Neither reads production geometry. Run GDS XOR separately when changing geometry
+serialization; graphical merge acceptance itself relies on native readback.
+
+`scripts/merge_benchmark.py` measures analysis, indexing, indexed page/pick queries
+and result materialization for 1K/10K/100K synthetic cells with sparse branch edits.
+Use `--trace-memory` separately for Python allocation peaks, since tracing adds
+substantial timing overhead. These timings exclude native capture/reconstruction,
+Git processes and EDA licenses. Retain machine-specific measurements under ignored
+evidence storage. Native alternatives use dependency closures; the complete
+three-way analysis and Result are still held in Python memory.

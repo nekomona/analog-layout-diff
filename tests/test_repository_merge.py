@@ -130,3 +130,83 @@ def test_hook_failure_retains_resolutions_for_retry(tmp_path):
         tx.commit_step('retry')
     finally:
         tx.cancel()
+
+
+def test_interrupted_commit_and_publication_are_recoverable(tmp_path):
+    repo, target, incoming = branches(tmp_path)
+    tx = RepositoryMerge.create(tmp_path / 'merge', repo, ['incoming'])
+    try:
+        tx.choose_file('notes.txt', 'incoming'); finish_cells(tx)
+        tx.state['phase'] = 'committing'; tx.save()
+        tx = RepositoryMerge(tx.path)
+        assert tx.recover_commit() is None
+        assert tx.state['phase'] == 'resolving'
+        result = tx.commit_step('merge after restart')
+        tx.state['phase'] = 'publishing'; tx.save()
+        git(repo, 'merge', '--ff-only', '--no-edit', result)
+        recovered = RepositoryMerge(tx.path)
+        assert recovered.recover_publish() == result
+        assert not recovered.work.exists()
+        assert not git(repo, 'status', '--porcelain').stdout
+    finally:
+        if tx.work.exists():
+            tx.cancel()
+
+
+def test_interrupted_preparation_can_resume(tmp_path, monkeypatch):
+    from layoutdiff.data.merge_session import MergeSession
+    repo, _, _ = branches(tmp_path)
+    original = MergeSession.create
+    def fail(*args, **kwargs):
+        raise RuntimeError('interrupted capture staging')
+    monkeypatch.setattr(MergeSession, 'create', fail)
+    with pytest.raises(RuntimeError, match='interrupted'):
+        RepositoryMerge.create(tmp_path / 'merge', repo, ['incoming'])
+    tx = RepositoryMerge(tmp_path / 'merge')
+    try:
+        monkeypatch.setattr(MergeSession, 'create', original)
+        tx.begin()
+        assert tx.state['phase'] == 'resolving' and len(tx.state['cells']) == 2
+    finally:
+        tx.cancel()
+
+
+def test_inherited_omission_reports_require_consent_and_remain_readable(tmp_path):
+    import hashlib
+    from layoutdiff.data.storage import from_snapshot
+    from layoutdiff.git.store import snapshot_directory
+    repo, _, _ = branches(tmp_path)
+    git(repo, 'switch', 'incoming')
+    identity = ['TEST', 'a', 'layout']
+    snapshot = snap(20)
+    folder = repo / snapshot_directory(identity)
+    store = from_snapshot(snapshot, folder); store.close()
+    (repo / snapshot_path(identity)).unlink()
+    raw = b'{"element":"synthetic","issues":["unknown"],"record":{"kind":"unknown"}}\n'
+    audit = dict(schema='analog-layout-diff/omissions/1', snapshotSha256=digest(snapshot),
+        sourceSha256='synthetic-source', omitted=1, detached=0, counts={'unknown': 1},
+        reportSha256=hashlib.sha256(raw).hexdigest())
+    (folder / 'omissions.jsonl').write_bytes(raw); atomic_json(folder / 'omissions.json', audit)
+    commit(repo, 'incomplete snapshot'); git(repo, 'switch', 'target')
+    tx = RepositoryMerge.create(tmp_path / 'merge', repo, ['incoming'])
+    try:
+        tx.choose_file('notes.txt', 'incoming'); finish_cells(tx)
+        with pytest.raises(ValueError, match='omission-loss consent'):
+            tx.commit_step('incomplete merge')
+        result = tx.commit_step('consented merge', omission_consent=True)
+        store = GitSnapshots(repo, identity, revision=result)
+        try:
+            assert store.omissions(result)['omitted'] == 1
+            assert store.snapshot(result) == snapshot
+        finally:
+            store.close()
+    finally:
+        tx.cancel()
+
+
+def test_git_scratch_outlives_runtime_tempdir(monkeypatch, tmp_path):
+    import tempfile
+    from layoutdiff.git.merge import scratch_root
+    root = tmp_path / 'ald-session-example' / 'tmp'; root.mkdir(parents=True)
+    monkeypatch.setattr(tempfile, 'gettempdir', lambda: str(root))
+    assert scratch_root() == tmp_path

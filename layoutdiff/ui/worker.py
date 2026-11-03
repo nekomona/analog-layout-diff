@@ -244,6 +244,11 @@ class GuiWorker:
         return lib
 
     def close(self):
+        if self.merge_controller:
+            for state in self.merge_controller.opened.values():
+                state['view'].close()
+                state['index'].close()
+            self.merge_controller.opened.clear()
         for preview in self.previews.values():
             preview.close()
         self.previews.clear()
@@ -746,7 +751,7 @@ class GuiWorker:
                 return self.merge_controller.open(args[0])
             if command == 'merge-setup' and not args:
                 return self.merge_controller.setup()
-            if command == 'merge-repository' and len(args) == 3:
+            if command == 'merge-repository' and len(args) in (3, 4):
                 return self.merge_controller.repository_action(*args)
             raise ValueError('Unknown merge request')
         if command in {"backend-info", "backend-config"}:

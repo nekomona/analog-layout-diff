@@ -10,6 +10,12 @@ from layoutdiff.data.history import atomic_json
 from layoutdiff.eda.virtuoso.sexpr import dumps as sk
 from layoutdiff.eda.virtuoso.merge_view import MergeView
 from layoutdiff.comparison.matching import bounds
+from layoutdiff.comparison.merge_index import MergeIndex
+
+
+def field_text(value):
+    raw = value.encode('utf-8')
+    return value if len(raw) < 7200 else raw[:7000].decode('utf-8', errors='ignore') + '\n[Details shortened]'
 
 
 class MergeController:
@@ -21,6 +27,7 @@ class MergeController:
         self.repositories = worker.root / 'merge-repositories'
         self.repositories.mkdir(exist_ok=True)
         self.pending_commit = None
+        self.repository_pages = {}
 
     def start(self, base, target, incoming, *, metadata=None):
         token = uuid.uuid4().hex
@@ -34,14 +41,17 @@ class MergeController:
             raise ValueError('Merge session is already open')
         session = session or MergeSession(self.root / token)
         view = MergeView(self.worker, token, session)
+        index = MergeIndex(session.plan)
+        view.index = index
         state = {'session': session, 'view': view, 'selected': next(iter(session.plan.units), None),
-                 'preview': None, 'page': 0, 'warnings': []}
+                 'preview': None, 'page': 0, 'warnings': [], 'index': index, 'category': None}
         self.opened[token] = state
         try:
             view.show(session.snapshot)
             self.refresh(token)
         except BaseException:
             view.close()
+            index.close()
             self.opened.pop(token)
             raise
         return {'token': token, 'generation': session.generation, 'unresolved': len(session.unresolved())}
@@ -50,11 +60,11 @@ class MergeController:
         state = self.opened[token]
         session, selected = state['session'], state['selected']
         rows = []
-        units = list(session.plan.units.items())
+        units = session.plan.units
         # Only a bounded page crosses the SKILL bridge.
-        if selected:
-            state['page'] = next(i for i, (k, _) in enumerate(units) if k == selected) // 50
-        for ident, unit in units[state['page']*50:(state['page']+1)*50]:
+        page = state['index'].page(state['category'], state['page']*50)
+        for ident in page:
+            unit = units[ident]
             status = ('resolved' if ident in session.state['resolved'] else
                       'unresolved' if unit['reasons'] else 'automatic')
             rows.append([ident, unit['category'], status])
@@ -73,10 +83,15 @@ class MergeController:
             if graphics and not state['view'].editing:
                 state['warnings'] = state['view'].highlight(selected)
         if state['warnings']:
-            explanation += '\nSome alternative contours use bounding boxes.'
+            explanation += '\n' + '\n'.join(str(w) for w in state['warnings'][:8])
+        if selected:
+            overlaps = state['index'].interactions(selected)
+            if overlaps:
+                explanation += '\nOverlapping branch changes: ' + ', '.join(overlaps) + '. Inspect geometry; this is not DRC/LVS.'
         explanation += '\n' + '\n'.join(session.plan.warnings)
         self.worker.execute(f'ALDMergeUpdate({sk(token)} {session.generation} {sk(rows)} '
-                            f'{sk(summary)} {sk(explanation)})')
+                            f'{sk(field_text(summary))} {sk(field_text(explanation))})')
+        self.worker.execute(f'ALDMergeCategories({sk(token)} {sk(state["index"].categories)} {sk(state["category"] or "All")})')
 
     def action(self, token, generation, action, value=''):
         state = self.opened.get(token)
@@ -89,8 +104,21 @@ class MergeController:
             if view.editing and action not in {'accept-edits', 'cancel-edits', 'details',
                                                'omit-continue', 'omit-confirm', 'omit-cancel'}:
                 raise ValueError('Accept or cancel native edits before another merge action')
-            if action in {'select', 'next', 'previous', 'pick'}:
-                ids = list(session.plan.units)
+            if action in {'category', 'page-next', 'page-previous'}:
+                if state['preview']:
+                    view.show(session.snapshot)
+                if action == 'category':
+                    if value != 'All' and value not in state['index'].categories:
+                        raise ValueError('Unknown category')
+                    state['category'], state['page'] = (None if value == 'All' else value), 0
+                else:
+                    candidate_page = max(0, state['page'] + (1 if action == 'page-next' else -1))
+                    if state['index'].page(state['category'], candidate_page*50):
+                        state['page'] = candidate_page
+                ids = state['index'].page(state['category'], state['page']*50)
+                state['selected'], state['preview'] = next(iter(ids), None), None
+            elif action in {'select', 'next', 'previous', 'pick'}:
+                ids = state['index'].page(state['category'], state['page']*50)
                 if not ids:
                     return {'unresolved': 0}
                 if action == 'select':
@@ -98,7 +126,12 @@ class MergeController:
                         raise ValueError('Unknown conflict')
                     selected = value
                 elif action == 'pick':
-                    selected = self.pick(session, value)
+                    if not isinstance(value, list) or len(value) != 2:
+                        raise ValueError('Expected a canvas point')
+                    choices = state['index'].pick(value)
+                    if len(choices) != 1:
+                        raise ValueError('Choose a decision row: no unique conflict at this point; candidates ' + ', '.join(choices))
+                    selected = choices[0]
                 else:
                     index = ids.index(state['selected']) if state['selected'] in ids else 0
                     selected = ids[(index + (1 if action == 'next' else -1)) % len(ids)]
@@ -165,10 +198,10 @@ class MergeController:
             elif action == 'details':
                 unit = session.plan.units.get(state['selected'], {})
                 text = json.dumps(unit, indent=2, ensure_ascii=True)
-                if len(text) > 60000:
+                if len(text.encode('utf-8')) > 7000:
                     destination = session.path / 'selected-details.json'
                     atomic_json(destination, unit)
-                    text = text[:60000] + '\nFull details: ' + str(destination)
+                    text = text.encode('utf-8')[:6800].decode('utf-8', errors='ignore') + '\nFull details: ' + str(destination)
                 self.worker.execute(f'ALDMergeDetails({sk(token)} {sk(text)})')
             elif action in {'validate', 'finish'}:
                 if state['preview']:
@@ -181,6 +214,7 @@ class MergeController:
                     return self.finish(token)
             elif action == 'suspend':
                 view.close()
+                state['index'].close()
                 self.opened.pop(token)
                 return {'suspended': token, 'generation': session.generation}
             else:
@@ -248,7 +282,7 @@ class MergeController:
             s = read_json(p)
             if s['phase'] not in {'published', 'cancelled'}:
                 rows.append([p.parent.name, s['phase'], s['original']['branch']])
-        self.worker.execute(f'ALDMergeSetup({sk(str(repo))} {sk(branch)} {sk(refs)} {sk(rows[-100:])})')
+        self.worker.execute(f'ALDMergeSetup({sk(str(repo))} {sk(branch)} {sk(refs[:100])} {sk(rows[-100:])})')
         return {'repository': str(repo), 'sessions': len(rows)}
 
     def repository(self, token):
@@ -263,17 +297,23 @@ class MergeController:
         cells = [[k, ' / '.join(c['identity']), 'validated' if c['validated'] else 'needs review']
                  for k, c in s['cells'].items()]
         files = [[p, choice or 'unresolved'] for p, choice in s['files'].items()]
+        pages = self.repository_pages.setdefault(token, {'cells': 0, 'files': 0})
         text = (f'Target: {s["original"]["branch"]}\nPhase: {s["phase"]}; step {min(s["step"]+1,len(s["incoming"]))}/{len(s["incoming"])}\n'
                 + 'Incoming order: ' + ' -> '.join(v['label'] for v in s['incoming']) +
                 f'\n{len(s.get("paths", []))} affected repository paths; {len(cells)} layout cells; {len(files)} ordinary-file conflicts.\n'
                 'Commit step creates an isolated two-parent commit. Publish fast-forwards the original clean checkout. OA layouts are unchanged.')
         # Complete affected paths remain available on disk; only bounded rows
         # enter the native forms. Paging is handled by repository navigation.
-        self.worker.execute(f'ALDMergeRepository({sk(token)} {sk(text)} {sk(cells[:100])} {sk(files[:100])})')
+        text += f'\nCell page {pages["cells"]+1}; file page {pages["files"]+1}. 100 rows per page.'
+        self.worker.execute(f'ALDMergeRepository({sk(token)} {sk(field_text(text))} '
+                            f'{sk(cells[pages["cells"]*100:(pages["cells"]+1)*100])} '
+                            f'{sk(files[pages["files"]*100:(pages["files"]+1)*100])} {sk(digest(s))})')
         return {'token': token, 'phase': s['phase'], 'cells': len(cells), 'files': len(files)}
 
-    def repository_action(self, action, token='', value=''):
+    def repository_action(self, action, token='', value='', stamp=None):
         from layoutdiff.git.merge import RepositoryMerge
+        if stamp is not None and action not in {'start', 'resume', 'refresh'} and digest(self.repository(token).state) != stamp:
+            raise ValueError('Stale repository request; refresh the merge panel')
         if action == 'start':
             incoming = value.replace(',', ' ').split()
             token = uuid.uuid4().hex
@@ -282,13 +322,19 @@ class MergeController:
             tx = self.repository(token)
             if tx.state['phase'] == 'committing':
                 tx.recover_commit()
+            elif tx.state['phase'] == 'publishing':
+                tx.recover_publish()
+            elif tx.state['phase'] in {'created', 'between', 'preparing'}:
+                tx.begin()
         elif action == 'open-cell':
             tx = self.repository(token)
             session = tx.cell(value)
             for existing, state in list(self.opened.items()):
                 if state['session'].path == session.path:
-                    self.worker.execute(f'hiSetCurrentWindow(ALDMergeSessions[{sk(existing)}][\'window])')
-                    return {'token': existing}
+                    if self.worker.execute(f'ALDMergeAlive({sk(existing)})') == 't':
+                        self.worker.execute(f'hiSetCurrentWindow(ALDMergeSessions[{sk(existing)}][\'window])')
+                        return {'token': existing}
+                    state['view'].close(); state['index'].close(); self.opened.pop(existing)
             return self.open(uuid.uuid4().hex, session)
         elif action == 'file':
             path, side = value
@@ -327,6 +373,30 @@ class MergeController:
             tx.cancel()
         elif action == 'refresh':
             pass
+        elif action in {'cells-next', 'cells-previous', 'files-next', 'files-previous'}:
+            table, direction = action.split('-')
+            pages = self.repository_pages.setdefault(token, {'cells': 0, 'files': 0})
+            proposed = max(0, pages[table] + (1 if direction == 'next' else -1))
+            if proposed*100 < len(self.repository(token).state[table]):
+                pages[table] = proposed
+        elif action in {'paths', 'show-file'}:
+            tx = self.repository(token)
+            from layoutdiff.git.commit import git
+            if action == 'paths':
+                text = '\n'.join(tx.state.get('paths', []))
+            else:
+                if value not in tx.state['files']:
+                    raise ValueError('Select an ordinary-file conflict')
+                text = ''
+                for label, rev in [('Target', tx.state['head']), ('Incoming', tx.state['incoming'][tx.state['step']]['sha'])]:
+                    raw = git(tx.work, 'diff', '--no-ext-diff', '--no-textconv', tx.state['base'], rev, '--', value).stdout
+                    text += label + '\n' + raw.decode('utf-8', errors='replace') + '\n'
+            with self.worker.work_area() as area:
+                path = area['path'] / 'merge-paths.txt'; path.write_text(text, encoding='utf-8')
+                remote = area['remote'] + '/merge-paths.txt'
+                from layoutdiff.eda.virtuoso.adapter import checked
+                checked(self.worker.client.upload_file(str(path), remote))
+                self.worker.execute(f'ALDGUIViewFile({sk(remote)} "Merge repository paths")')
         else:
             raise ValueError('Unknown repository merge action')
         return self.repository_panel(token)
@@ -344,6 +414,7 @@ class MergeController:
         for token, state in list(self.opened.items()):
             if state['session'].metadata.get('repository') == str(tx.path):
                 state['view'].close()
+                state['index'].close()
                 self.opened.pop(token)
 
     def commit_repository_step(self, tx, message, **kwargs):
@@ -352,4 +423,5 @@ class MergeController:
             if state['session'].metadata.get('repository') == str(tx.path) and (state['view'].editing or state['preview']):
                 raise ValueError('Accept or cancel every native edit and preview before committing')
         tx.commit_step(message, **kwargs)
+        self.repository_pages[tx.path.name] = {'cells': 0, 'files': 0}
         self.close_repository_views(tx)

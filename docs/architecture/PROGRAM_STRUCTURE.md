@@ -87,6 +87,9 @@ layoutdiff/
     streampatch.py        Checked patch bundles
     history.py            Standalone chains and atomic JSON helpers
     backends.py           External snapshot-reader contract
+    merge.py              Conservative logical three-way merge and compound units
+    merge_session.py      Integrity-checked decisions and durable undo/redo
+    references.py         Shared native relationship fields
     acceleration.py       Optional C++ dispatch, provenance and parity checks
     native_source.sha256  Packaged source pin
   comparison/
@@ -96,6 +99,7 @@ layoutdiff/
     review_groups.py      Group changes and boundary targets
     categories.py         Category rules, counts and detail formatting
     changeindex.py        Disk-backed category index and paging
+    merge_index.py        Merge category, spatial and dependency indexes
   eda/
     virtuoso/
       adapter.py          Capture, replay and native readback service
@@ -110,7 +114,8 @@ layoutdiff/
       sexpr.py            Data-only SKILL transport encoding/parsing
       paths.py            Session-owned native scratch paths
       geometry.py         XStream export and independent KLayout GDS checks
-      skill/              reader.il, hierarchy.il
+      merge_view.py       Disposable merge result and alternative projections
+      skill/              Capture, hierarchy and docked merge forms
     klayout/
       __main__.py         python -m layoutdiff.eda.klayout
       api.py              Embedded pya / standalone binding selection
@@ -122,6 +127,7 @@ layoutdiff/
       analog_layout_diff.lym  Desktop bootstrap macro
       style.example.json  Example review style
   git/
+    merge.py              Isolated multi-cell branch integration and publication
     store.py              Immutable Git snapshot history reads
     commit.py             Preview and isolated Git commit transaction
     tools.py              Repository configuration and semantic textconv

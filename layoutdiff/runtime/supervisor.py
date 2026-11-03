@@ -36,7 +36,8 @@ def process_identity(pid, proc=Path("/proc")):
 
 def remove_owned_locks(root, pid):
     """Call only after waiting for the owned worker, while holding runtime flock."""
-    for path in [root / "worker.lock", *root.glob("histories/*/.lock")]:
+    for path in [root / "worker.lock", *root.glob("histories/*/.lock"),
+                 *root.glob('merges/*/LOCK'), *root.glob('merge-repositories/*/step-*/*/LOCK')]:
         try:
             if path.read_text().strip() == str(pid):
                 path.unlink()
