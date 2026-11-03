@@ -24,6 +24,8 @@ class View:
         self.editing = True
     def capture(self):
         return state(30)
+    def capture_supported(self):
+        return self.capture(), None, 'source'
     def close(self):
         pass
 
@@ -88,3 +90,44 @@ def test_finish_rejects_pending_preview_or_unresolved_decisions(monkeypatch, tmp
     c.action(token, 0, 'preview', 'target')
     with pytest.raises(ValueError, match='current preview'):
         c.action(token, 0, 'finish')
+
+
+def test_omissions_require_two_consents_and_survive_undo(monkeypatch, tmp_path):
+    c, token = controller(monkeypatch, tmp_path)
+    s = c.opened[token]['session']
+    v = c.opened[token]['view']
+    audit = {'omitted': 1, 'detached': 0, 'counts': {'unknown': 1}, 'reportSha256': 'test'}
+    v.capture_supported = lambda: (state(30), audit, 'source')
+    c.action(token, 0, 'edit')
+    assert c.action(token, 0, 'accept-edits')['omission_confirmation'] == 1
+    assert s.generation == 0 and v.editing
+    with pytest.raises(ValueError, match='missing or stale'):
+        c.action(token, 0, 'omit-confirm')
+    c.action(token, 0, 'omit-cancel')
+    assert s.snapshot == state(0) and v.editing
+    c.action(token, 0, 'accept-edits')
+    assert c.action(token, 0, 'omit-continue')['omission_confirmation'] == 2
+    assert s.generation == 0
+    c.action(token, 0, 'omit-confirm')
+    assert s.snapshot == state(30) and s.state['omissions'] == audit
+    c.action(token, 1, 'undo')
+    assert 'omissions' not in s.state
+    c.action(token, 2, 'redo')
+    assert s.state['omissions'] == audit
+    c.action(token, 3, 'suspend')
+    c.open(token)
+    assert c.opened[token]['session'].state['omissions'] == audit
+
+
+def test_edit_after_omission_preview_invalidates_consent(monkeypatch, tmp_path):
+    c, token = controller(monkeypatch, tmp_path)
+    v = c.opened[token]['view']
+    audit = {'omitted': 1, 'detached': 0, 'counts': {}}
+    v.capture_supported = lambda: (state(30), audit, 'source')
+    c.action(token, 0, 'edit')
+    c.action(token, 0, 'accept-edits')
+    c.action(token, 0, 'omit-continue')
+    v.capture_supported = lambda: (state(30), audit, 'changed-unknown-content')
+    with pytest.raises(ValueError, match='changed after omission'):
+        c.action(token, 0, 'omit-confirm')
+    assert c.opened[token]['session'].generation == 0 and v.editing

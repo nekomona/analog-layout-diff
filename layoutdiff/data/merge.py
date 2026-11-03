@@ -14,7 +14,7 @@ from layoutdiff.data.core import canonicalize, digest, encoded, validate, SCHEMA
 from layoutdiff.data.storage import NAMED
 from layoutdiff.comparison.matching import pairs
 from layoutdiff.comparison.categories import category, operation_category
-from layoutdiff.eda.virtuoso.oa_content import LINK_FIELDS
+from layoutdiff.data.references import LINK_FIELDS, dependencies, alias_owner
 
 SIDES = ('base', 'target', 'incoming')
 GEOMETRY = frozenset(('bBox', 'points', 'xy', 'origin', 'orient', 'width', 'beginPt', 'endPt',
@@ -203,15 +203,27 @@ class MergePlan:
         for keys in mpps.values():
             if set(keys) & changed.keys():
                 union(keys)
+        # Ordered groups and multi-figure pins form compound decisions. A field
+        # merge must not leave duplicate ordinals or two primary pin figures.
+        compounds = defaultdict(set)
+        for side in SIDES:
+            objects = self.records[side]
+            for k, r in objects.items():
+                if r['kind'] == 'figGroup' and r.get('ordered'):
+                    compounds['group/' + r['name']].add(k)
+                if r.get('group') and objects.get('figGroup:' + r['group'], {}).get('ordered'):
+                    compounds['group/' + r['group']].add(k)
+                if r.get('pin'):
+                    p = r['pin']
+                    compounds['pin/' + p['term'] + '/' + p['name']].add(k)
+        for keys in compounds.values():
+            if keys & changed.keys():
+                union(keys)
         # Deleting a referenced object couples the owner and target choices.
         for side in SIDES:
             for k, r in self.records[side].items():
-                refs = references(r)
-                if r.get('net'):
-                    refs.append('net:' + r['net'])
-                if r.get('group'):
-                    refs.append('figGroup:' + r['group'])
-                for ref in refs:
+                for target in dependencies(r):
+                    ref = alias_owner(target)
                     if ref in changed and any(v is None for v in changed[ref]):
                         union((k, ref))
         # Technology and DBU changes cannot be mixed with another coordinate system.
@@ -229,6 +241,10 @@ class MergePlan:
                 continue
             alternatives = {s: {k: self.records[s][k] for k in keys if k in self.records[s]} for s in SIDES}
             combined, reasons = {}, []
+            if any(set(keys) & members for members in mpps.values()):
+                b, t, i = (alternatives[s] for s in SIDES)
+                if t != b and i != b and t != i:
+                    reasons.append('coupled MPP recipe and generated members')
             for k in keys:
                 b, t, i = [self.records[s].get(k) for s in SIDES]
                 record, issues = merge_record(b, t, i)
@@ -242,6 +258,19 @@ class MergePlan:
                     reasons.append('inferred correspondence needs confirmation')
             if set(keys) & ambiguous:
                 reasons.append('ambiguous anonymous correspondence or coordinate-system change')
+            for k, r in combined.items():
+                if r['kind'] == 'figGroup' and r.get('ordered'):
+                    members = [v for v in combined.values() if v.get('group') == r['name']]
+                    ranks = [v.get('groupOrder') for v in members]
+                    if r.get('memberCount') != len(members) or sorted(v for v in ranks if type(v) is int) != list(range(len(members))):
+                        reasons.append('incompatible ordered-group membership')
+            pinsets = defaultdict(list)
+            for r in combined.values():
+                if r.get('pin'):
+                    p = r['pin']; pinsets[(p['term'], p['name'])].append(p)
+            for pins in pinsets.values():
+                if any('primary' in p for p in pins) and sum(bool(p.get('primary')) for p in pins) != 1:
+                    reasons.append('incompatible primary pin figures')
             primary = next(k for k in keys if k in changed)
             b, t, i = [self.records[s].get(primary) for s in SIDES]
             record = t or i or b

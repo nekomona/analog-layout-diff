@@ -83,7 +83,8 @@ class MergeController:
         session.check(generation)
         self.worker.execute(f'ALDMergeBusy({sk(token)} {sk(action)})')
         try:
-            if view.editing and action not in {'accept-edits', 'cancel-edits', 'details'}:
+            if view.editing and action not in {'accept-edits', 'cancel-edits', 'details',
+                                               'omit-continue', 'omit-confirm', 'omit-cancel'}:
                 raise ValueError('Accept or cancel native edits before another merge action')
             if action in {'select', 'next', 'previous', 'pick'}:
                 ids = list(session.plan.units)
@@ -117,12 +118,36 @@ class MergeController:
             elif action == 'accept-edits':
                 if not view.editing:
                     raise ValueError('Start Edit result first')
-                candidate = view.capture()
+                candidate, audit, source_hash = view.capture_supported()
+                if audit:
+                    state['omission_pending'] = {'snapshot': candidate, 'audit': audit,
+                                                 'source': source_hash, 'phase': 1}
+                    self.omission_prompt(token, 1)
+                    return {'omission_confirmation': 1}
                 # Reconstruct separately before accepting edits into the journal.
                 view.show(candidate)
                 session.accept_edits(candidate, state['selected'], generation)
                 state['preview'] = None
+            elif action == 'omit-cancel':
+                state.pop('omission_pending', None)
+            elif action in {'omit-continue', 'omit-confirm'}:
+                pending = state.get('omission_pending')
+                phase = 1 if action == 'omit-continue' else 2
+                if not pending or pending['phase'] != phase:
+                    raise ValueError('Omission consent is missing or stale')
+                if phase == 1:
+                    pending['phase'] = 2
+                    self.omission_prompt(token, 2)
+                    return {'omission_confirmation': 2}
+                candidate, audit, source_hash = view.capture_supported()
+                state.pop('omission_pending')
+                if source_hash != pending['source'] or audit != pending['audit'] or candidate != pending['snapshot']:
+                    raise ValueError('Native content changed after omission preview; review it again')
+                view.show(candidate)
+                session.accept_edits(candidate, state['selected'], generation, omissions=audit)
+                state['preview'] = None
             elif action == 'cancel-edits':
+                state.pop('omission_pending', None)
                 view.show(session.snapshot)
                 state['preview'] = None
             elif action in {'undo', 'redo'}:
@@ -180,6 +205,16 @@ class MergeController:
         if len(choices) > 1:
             raise ValueError('Several conflicts overlap; select their category/row: ' + ', '.join(choices[:8]))
         return choices[0]
+
+    def omission_prompt(self, token, phase):
+        pending = self.opened[token]['omission_pending']
+        audit = pending['audit']
+        text = (f'{audit["omitted"]} unsupported elements will be omitted; '
+                f'{audit["detached"]} group memberships will be detached.\n' +
+                json.dumps(audit['counts'], indent=2))
+        if phase == 2:
+            text = 'Restoring or rolling back to this result WILL LOSE the omitted elements.\n' + text
+        self.worker.execute(f'ALDMergeOmissionPrompt({sk(token)} {phase} {sk(text)})')
 
     def finish(self, token):
         # Repository integration installs a coordinator; file-only sessions retain

@@ -1,5 +1,6 @@
 """Disposable native merge views and independently drawn alternative geometry."""
 from pathlib import Path
+import shutil
 import uuid
 
 from layoutdiff.data.core import canonicalize, digest
@@ -121,6 +122,23 @@ class MergeView:
             native = self.current
             actual = self.worker.adapter.capture(native['library'], native['cell'])
             return actual
+
+    def capture_supported(self):
+        """Retain complete omission diagnostics; caller must obtain two consents."""
+        with self.worker.work_area():
+            native = self.current
+            store = self.worker.adapter.capture_store(native['library'], native['cell'],
+                allow_unsupported=True, temporary=True)
+            try:
+                audit = store.omissions
+                if audit:
+                    destination = self.session.path / 'omissions' / (audit['reportSha256'] + '.jsonl')
+                    destination.parent.mkdir(exist_ok=True)
+                    if not destination.exists():
+                        shutil.copyfile(store.omission_report, destination)
+                return store.materialize(), audit, store.source_digest
+            finally:
+                store.dispose()
 
     def close(self):
         self.worker.execute(f'ALDMergeClose({sk(self.token)} t)')

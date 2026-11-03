@@ -180,3 +180,16 @@ procedure(ALDMergeDetails(token text)
           ?title "Serialized preview (optional)" ?dockSizeHint list(880 260))
         hiDockWindow(?window dw ?session hiGetSessionWindow(s['window]) ?side 'bottom)
         s['docks]=cons(dw s['docks])))))
+
+procedure(ALDMergeOmissionPrompt(token phase text)
+  let((form yes no body)
+    body=hiCreateMLTextField(?name 'aldWarning ?prompt "" ?editable nil ?value text)
+    yes=hiCreateButton(?name 'aldContinue ?buttonText if(phase==1 then "Continue ignoring elements" else "Confirm loss and accept edits")
+      ?callback sprintf(nil "hiFormCancel(aldMergeOmission) ALDMergeRequest(%L %L)" token if(phase==1 then "omit-continue" else "omit-confirm")))
+    no=hiCreateButton(?name 'aldReject ?buttonText "Reject" ?callback sprintf(nil
+      "hiFormCancel(aldMergeOmission) ALDMergeRequest(%L \"omit-cancel\")" token))
+    when(boundp('aldMergeOmission) && aldMergeOmission hiFormCancel(aldMergeOmission) hiDeleteForm(aldMergeOmission))
+    form=hiCreateAppForm(?name 'aldMergeOmission ?formTitle "Merge result contains unsupported elements"
+      ?fields list(list(body 10:10 600:180 0) list(no 10:200 170:35) list(yes 200:200 410:35))
+      ?buttonLayout 'Empty ?dontBlock t ?dialogStyle 'modeless ?initialSize list(630 270))
+    hiDisplayForm(form)))

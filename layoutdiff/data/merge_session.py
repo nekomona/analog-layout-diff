@@ -144,8 +144,8 @@ class MergeSession:
 
     def _decision(self, action, snapshot, state):
         # Undo entries reference compact, immutable before/after state and patch.
-        data = {'before': {'choices': self.state['choices'], 'resolved': self.state['resolved']},
-                'after': {'choices': state['choices'], 'resolved': state['resolved']},
+        data = {'before': {k: v for k, v in self.state.items() if k not in {'undo', 'redo'}},
+                'after': {k: v for k, v in state.items() if k not in {'undo', 'redo'}},
                 'patch': diff(self.snapshot, snapshot)}
         ident = digest(data)
         atomic_json(self.path / 'events' / (ident + '.json'), data)
@@ -153,7 +153,7 @@ class MergeSession:
         state['redo'] = []
         return self._append(action, snapshot, state)
 
-    def accept_edits(self, snapshot, unit_id, generation):
+    def accept_edits(self, snapshot, unit_id, generation, *, omissions=None):
         with self.lock(generation):
             if unit_id not in self.plan.units:
                 raise ValueError('Select the decision resolved by these edits')
@@ -162,6 +162,8 @@ class MergeSession:
             # Native editing can affect any prior decision. Reopen explicit
             # resolutions conservatively; the geometry stays visible for review.
             state['resolved'] = {unit_id: 'manual'}
+            if omissions:
+                state['omissions'] = omissions
             return self._decision({'unit': unit_id, 'choice': 'manual'}, snapshot, state)
 
     def undo(self, generation, *, redo=False):
@@ -173,6 +175,7 @@ class MergeSession:
             ident = state[source].pop()
             data = self.event(ident)
             snapshot = apply_diff(self.snapshot, data['patch'], reverse=not redo)
-            state.update(copy.deepcopy(data['after' if redo else 'before']))
+            state = {**copy.deepcopy(data['after' if redo else 'before']),
+                     'undo': state['undo'], 'redo': state['redo']}
             state[dest].append(ident)
             return self._append({'action': source, 'decision': ident}, snapshot, state)

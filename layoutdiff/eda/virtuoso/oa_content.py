@@ -1,14 +1,7 @@
 """Relationships and replay ordering for persistent OA layout annotations."""
 from graphlib import TopologicalSorter
 
-LINK_FIELDS = {'textDisplay': ('owner', 'associate', 'parent'),
-               'layerBlockage': ('owner', 'parent'),
-               'areaBlockage': ('owner', 'parent'), 'snapBoundary': ('parent',)}
-
-
-def references(record):
-    return [record[field] for field in LINK_FIELDS.get(record['kind'], ())
-            if isinstance(record.get(field), str) and record[field]]
+from layoutdiff.data.references import LINK_FIELDS, references
 
 
 def replay_items(snapshot):
