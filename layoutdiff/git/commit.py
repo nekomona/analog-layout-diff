@@ -186,7 +186,7 @@ def prepare_v2(repo, identity, snapshot, *, backend="auto"):
         changes = ChangeIndex(before, snapshot, backend=backend)
         adopting = blob(repo, base["head"], prefix + "/manifest.json") is None and before.count > 0
         files = {prefix + "/" + name: snapshot.path / name for name in FILES}
-        from layoutdiff.virtuoso.omissions import AUDIT, DETAILS, warning
+        from layoutdiff.eda.virtuoso.omissions import AUDIT, DETAILS, warning
         omissions = getattr(snapshot, 'omissions', None)
         audit_changed = False
         for name, data in ((AUDIT, json_bytes(omissions) if omissions else None),

@@ -116,7 +116,7 @@ def via_default_projection(snapshot, defaults, *, mpp_connectivity=False, mpp_ca
     if not normalized:
         return canonicalize(list(records.values())), 0
 
-    from layoutdiff.virtuoso.oa_content import LINK_FIELDS, references as links
+    from layoutdiff.eda.virtuoso.oa_content import LINK_FIELDS, references as links
     references = {m['target'] for r in records.values() if r['kind'] == 'group'
                   for m in r.get('members', [])}
     references.update(ref for r in records.values() for ref in links(r))

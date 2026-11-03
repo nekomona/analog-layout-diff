@@ -10,8 +10,8 @@ import shlex
 import time
 import uuid
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 
 c = VirtuosoClient.from_env()
 tag = uuid.uuid4().hex[:8]

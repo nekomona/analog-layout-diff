@@ -41,4 +41,4 @@ Native comparison uses the same selected scope as capture.
 
 Hierarchy fingerprints detect child changes without archiving child contents.
 Recursive hierarchy bundles and a direct OA reader are not implemented. See the
-[data model](../data/MODEL.md) for identity and external dependencies.
+[data model](../../data/MODEL.md) for identity and external dependencies.

@@ -1,6 +1,6 @@
 # Verification methodology
 
-Run the offline suite with `python -m pytest tests klayout_plugin/tests -q`.
+Run the offline suite with `python -m pytest tests -q`.
 Permanent fixtures contain synthetic data. They cover canonical identity,
 duplicate multiplicity, type distinctions, exact forward/reverse patches,
 legacy histories, v2 streaming storage, Git transactions, matching, review,
@@ -16,7 +16,7 @@ Compare Python and C++ results byte-for-byte when changing the optional backend.
 Measure validation, matching, Git work, capture and native replay separately;
 see [performance methodology](../data/PERFORMANCE.md).
 
-Coverage remains bounded by [supported categories](../virtuoso/COVERAGE.md), external
+Coverage remains bounded by [supported categories](../eda/virtuoso/COVERAGE.md), external
 technology/master definitions and the target Virtuoso version. See the
 [CLI assessment](../ui/CLI.md) for unsupported-data limits.
 Local execution logs, installation snapshots and design measurements belong in

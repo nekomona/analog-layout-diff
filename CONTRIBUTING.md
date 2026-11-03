@@ -31,11 +31,12 @@ Start from the intended development branch and keep unrelated edits separate.
 | --- | --- |
 | `data` | Preserve canonical types, identities, duplicate multiplicity, integrity and reversible patch behavior |
 | `comparison` | Keep inferred correspondence and visual classification separate from exact stored operations |
-| `virtuoso` | Extend capture, reference resolution, coverage, replay and readback together; verify APIs against installed Cadence docs |
+| `eda.virtuoso` | Extend capture, reference resolution, coverage, replay and readback together; verify APIs against installed Cadence docs |
+| `eda.klayout` | Keep static capture, reconstruction, review and rendering consistent with the documented KLayout contract |
 | `git` | Preserve unrelated staged/unstaged work, repository-local configuration and stale-preview checks |
 | `ui` | Keep user confirmation, omission audits, read-only review and checkpoint-restore behavior explicit |
 | `runtime` | Preserve process identity, owned resources and lease-based cleanup |
-| C++ / KLayout | Match the Python reference or the documented static-layout contract, respectively |
+| C++ | Match the Python reference and wire protocol |
 
 Use package-qualified imports. Importing a package must not connect to Virtuoso
 or launch processes. Explain API/schema changes and compatibility effects in the
@@ -54,10 +55,10 @@ and synthetic, and test the invariant or failure being fixed.
 | Storage or patches | Forward/reverse replay, corruption rejection, types and duplicate multiplicity |
 | Native OA/ROD behavior | Dedicated test-library capture/replay and native readback; GDS XOR/labels as a separate geometry check |
 | C++ kernel | Python/native byte parity and failure/fallback behavior |
-| KLayout frontend | `klayout_plugin/tests`; verify desktop interaction separately from database/view API tests |
+| KLayout frontend | `tests/test_klayout.py`; verify desktop interaction separately from database/view API tests |
 
 ```sh
-python -m pytest tests klayout_plugin/tests -q --basetemp=.test-tmp-run
+python -m pytest tests -q --basetemp=.test-tmp-run
 python scripts/check_docs.py
 python scripts/check_publication.py
 ```

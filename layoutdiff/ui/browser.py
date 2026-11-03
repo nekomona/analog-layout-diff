@@ -143,7 +143,7 @@ class HistoryBrowser:
                    f"   {stat['modified_net']} modified net"
                    f"   {stat['moved']} moved / stretched"
                    f"    |    {len(files)} affected files")
-        from layoutdiff.virtuoso.omissions import warning
+        from layoutdiff.eda.virtuoso.omissions import warning
         omission_warning = warning(self.store.omissions(commit_id)) if self.store else ''
         if omission_warning:
             summary = omission_warning + '\n\n' + summary

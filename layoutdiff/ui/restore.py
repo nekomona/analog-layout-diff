@@ -1,10 +1,10 @@
 """Explicit checkpoint restoration; Git index, worktree, and refs stay untouched."""
 import hashlib
 from pathlib import Path
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 from layoutdiff.data.history import atomic_json
-from layoutdiff.virtuoso.dependencies import native_snapshot
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter
+from layoutdiff.eda.virtuoso.dependencies import native_snapshot
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter
 from layoutdiff.data.core import digest
 
 
@@ -33,7 +33,7 @@ def prepare(worker, identity, revision):
     model = worker.history_model(identity) if owned else state['model']
     try:
         _, after = model.pair(revision)
-        from layoutdiff.virtuoso.omissions import warning
+        from layoutdiff.eda.virtuoso.omissions import warning
         omission_warning = warning(model.store.omissions(revision)) if model.store else ''
     finally:
         if owned:

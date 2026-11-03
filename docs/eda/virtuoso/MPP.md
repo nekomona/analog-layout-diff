@@ -36,4 +36,4 @@ Snapshots without MPP recipes reconstruct flattened geometry. Replay cannot
 infer a recipe from a PDK or a live source.
 
 
-See [comparison and matching](../comparison/README.md) for presentation pairing.
+See [comparison and matching](../../comparison/README.md) for presentation pairing.

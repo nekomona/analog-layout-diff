@@ -174,5 +174,5 @@ remain available without either service.
 | Installer cannot find Bridge source or its SSH runner | Check the parent source layout and SSH-backed `from_env()` configuration |
 
 See [runtime ownership](README.md#ownership-and-shutdown),
-[native adapter coverage](../virtuoso/README.md), and
+[native adapter coverage](../eda/virtuoso/README.md), and
 [CLI dependency limits](../ui/CLI.md#cli-dependency-boundary).

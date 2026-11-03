@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import time
 from layoutdiff.data.storage import write_records
-from layoutdiff.virtuoso.omissions import project
+from layoutdiff.eda.virtuoso.omissions import project
 
 out = Path(__file__).resolve().parents[1]/'evidence/omissions'
 out.mkdir(parents=True, exist_ok=True)

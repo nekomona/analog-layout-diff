@@ -9,10 +9,10 @@ from explore import ROOT
 from inventory import LIB
 from virtuoso_bridge import VirtuosoClient
 from layoutdiff.data.core import canonicalize
-from layoutdiff.virtuoso.dependencies import DependencyWarning
+from layoutdiff.eda.virtuoso.dependencies import DependencyWarning
 from layoutdiff.data.history import atomic_json
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter
 
 c = VirtuosoClient.from_env()
 run = uuid.uuid4().hex[:8]

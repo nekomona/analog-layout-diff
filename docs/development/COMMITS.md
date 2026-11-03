@@ -37,12 +37,13 @@ Choose the narrowest owning component from the
 | --- | --- |
 | `data` | Canonical model, storage, exact operations and standalone chains |
 | `comparison` | Matching, classification, categories and paging |
+| `eda` | Shared design-tool adapter organization and interfaces |
 | `virtuoso` | Native capture/replay, coverage and readback |
 | `git` | Snapshot history, commit transactions and textconv |
 | `ui` | CLI, toolbar, browser, review and restore |
 | `runtime` | Supervisor/worker, deployment and cleanup |
 | `native` | Optional C++ backend |
-| `klayout` | Separate static-layout frontend |
+| `klayout` | KLayout adapter and static-layout frontend |
 | `docs` | Cross-component reference documentation |
 | `tests` | Shared test infrastructure or fixtures |
 | `tooling` | Development and maintenance scripts |

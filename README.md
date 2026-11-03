@@ -17,7 +17,7 @@ file-only comparison and replay run independently of Cadence.
 | Capture and version | Canonical layout records stored as deterministic, reviewable JSONL in Git |
 | Compare and review | Geometry, connectivity and property changes, conservative movement matching, category counts and native highlights |
 | Reconstruct and verify | Fresh-cell reconstruction with native readback and hierarchy-drift warnings |
-| Work from files | Exact diff/apply, integrity-checked replay and a separate KLayout GDS/OASIS frontend |
+| Work from files | Exact diff/apply, integrity-checked replay and the KLayout GDS/OASIS adapter |
 
 The Virtuoso toolbar provides **Save & Commit**, **History** and **Runtime**.
 Save & Commit saves the edited view, previews changes and commits after
@@ -63,9 +63,9 @@ layouts. Unknown content blocks strict reconstruction. Supported-only GUI commit
 require explicit loss confirmation and retain an omission audit. Use a separate
 database archive for production recovery.
 
-See [native coverage](docs/virtuoso/COVERAGE.md),
+See [native coverage](docs/eda/virtuoso/COVERAGE.md),
 [preservation limits](docs/ui/CLI.md), and the
-[KLayout frontend](docs/klayout_plugin/README.md). GDS comparison verifies exported
+[KLayout frontend](docs/eda/klayout/README.md). GDS comparison verifies exported
 geometry and labels, rather than the full native object graph.
 
 ## Contribute
@@ -76,7 +76,7 @@ and pull requests. Use commit subjects such as
 the [commit convention](docs/development/COMMITS.md) defines types and scopes.
 
 ```sh
-python -m pytest tests klayout_plugin/tests -q --basetemp=.test-tmp-run
+python -m pytest tests -q --basetemp=.test-tmp-run
 python scripts/check_docs.py
 python scripts/check_publication.py
 ```

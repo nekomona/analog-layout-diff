@@ -11,9 +11,9 @@ SUPPORTED = {"cell", "rect", "polygon", "path", "pathSeg", "label", "ellipse", "
 def record_issues(r):
     issues = []
     kind = r["kind"]
-    from layoutdiff.virtuoso.oa_content import issues as oa_issues
+    from layoutdiff.eda.virtuoso.oa_content import issues as oa_issues
     issues.extend(oa_issues(r))
-    from layoutdiff.virtuoso.mpp import issues as mpp_issues
+    from layoutdiff.eda.virtuoso.mpp import issues as mpp_issues
     issues.extend(mpp_issues(r))
     if kind not in SUPPORTED:
         issues.append("unsupported collection: " + str(r.get('category', kind)) if kind == "unsupported"
@@ -133,7 +133,7 @@ def coverage(snapshot):
             groups.add(key, r)
         for key, reasons in groups.issues():
             issues.extend(reason + ": " + key for reason in reasons)
-        from layoutdiff.virtuoso.logical_groups import pin_key, inst_term_key
+        from layoutdiff.eda.virtuoso.logical_groups import pin_key, inst_term_key
         targets = set(snapshot['objects'])
         for r in snapshot['objects'].values():
             if r.get('pin'):
@@ -148,7 +148,7 @@ def coverage(snapshot):
                 for name, _, props in r.get('connections') or []:
                     property_roots[inst_term_key(r['name'], name)] = {'props': props}
         for key, r in snapshot['objects'].items():
-            from layoutdiff.virtuoso.oa_content import references
+            from layoutdiff.eda.virtuoso.oa_content import references
             for target in references(r):
                 if target not in targets:
                     issues.append('missing object reference: ' + key + ' -> ' + target)
@@ -166,7 +166,7 @@ def coverage(snapshot):
                 for member in r.get('members') or []:
                     if member.get('target') not in targets:
                         issues.append('missing logical group member: ' + key)
-        from layoutdiff.virtuoso.oa_content import replay_items
+        from layoutdiff.eda.virtuoso.oa_content import replay_items
         from graphlib import CycleError
         try:
             replay_items(snapshot)

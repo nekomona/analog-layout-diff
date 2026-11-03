@@ -161,8 +161,8 @@ def supervise(root, parent_pid, port, review_library, *, worker_command=None, gr
 def run_worker(root, session, port, parent_pid, review_library):
     from virtuoso_bridge import VirtuosoClient
     from layoutdiff.ui.worker import GuiWorker
-    from layoutdiff.virtuoso.adapter import checked
-    from layoutdiff.virtuoso.sexpr import dumps as sk
+    from layoutdiff.eda.virtuoso.adapter import checked
+    from layoutdiff.eda.virtuoso.sexpr import dumps as sk
     root, session = Path(root), Path(session)
     # An explicit local client never reads the Windows/SSH configuration.
     client = VirtuosoClient.local(port=port)

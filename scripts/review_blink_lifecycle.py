@@ -6,8 +6,8 @@ import shlex
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import checked
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import checked
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 from layoutdiff.data.history import atomic_json
 
 out = Path(__file__).resolve().parents[1] / 'evidence/review-shadows'

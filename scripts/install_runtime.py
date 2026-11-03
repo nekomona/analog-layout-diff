@@ -10,8 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from virtuoso_bridge import VirtuosoClient
 from layoutdiff.data.history import atomic_json
-from layoutdiff.virtuoso.sexpr import dumps as sk
-from layoutdiff.virtuoso.adapter import checked
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk
+from layoutdiff.eda.virtuoso.adapter import checked
 
 PROJECT = Path(__file__).resolve().parents[1]
 
@@ -57,6 +57,7 @@ def main():
     bundle = evidence / "runtime-source.tar.gz"
     with tarfile.open(bundle, "w:gz") as tar:
         for directory, prefix in [(PROJECT / "layoutdiff", "app/layoutdiff"),
+                                  (PROJECT / "klayout_plugin", "app/klayout_plugin"),
                                   (PROJECT.parent / "src/virtuoso_bridge", "bridge/src/virtuoso_bridge")]:
             for path in sorted(directory.rglob("*")):
                 if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":

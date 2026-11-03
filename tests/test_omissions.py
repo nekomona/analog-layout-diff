@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import pytest
 from layoutdiff.data.core import canonicalize
 from layoutdiff.data.storage import from_snapshot
-from layoutdiff.virtuoso.omissions import project, AUDIT, DETAILS
-from layoutdiff.virtuoso.support import coverage, checked_records, UnsupportedContentError
-from layoutdiff.virtuoso.adapter import normalize
+from layoutdiff.eda.virtuoso.omissions import project, AUDIT, DETAILS
+from layoutdiff.eda.virtuoso.support import coverage, checked_records, UnsupportedContentError
+from layoutdiff.eda.virtuoso.adapter import normalize
 from layoutdiff.ui.worker import GuiWorker
 import layoutdiff.git.commit as gc
 from layoutdiff.git.store import GitSnapshots, path_identity

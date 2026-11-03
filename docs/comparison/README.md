@@ -58,6 +58,6 @@ page and produces complete detail text only when requested.
 | [changeindex.py](../../layoutdiff/comparison/changeindex.py) | Disk-backed indexing and paging |
 
 The [UI guide](../ui/README.md#review-controls) describes display controls.
-[Native replay](../virtuoso/README.md) verifies reconstructed content separately
+[Native replay](../eda/virtuoso/README.md) verifies reconstructed content separately
 from these presentation rules. See [performance methodology](../data/PERFORMANCE.md)
 when measuring matching costs independently of exact stream merging.

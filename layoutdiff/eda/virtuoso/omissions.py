@@ -9,9 +9,9 @@ from collections import Counter
 import json
 from layoutdiff.data.core import encoded, digest
 from layoutdiff.data.storage import spool, write_records, NAMED
-from layoutdiff.virtuoso.support import GroupCheck, record_issues, checked_records, UnsupportedContentError
-from layoutdiff.virtuoso.logical_groups import pin_key, inst_term_key, resolve_records
-from layoutdiff.virtuoso.oa_content import LINK_FIELDS, references
+from layoutdiff.eda.virtuoso.support import GroupCheck, record_issues, checked_records, UnsupportedContentError
+from layoutdiff.eda.virtuoso.logical_groups import pin_key, inst_term_key, resolve_records
+from layoutdiff.eda.virtuoso.oa_content import LINK_FIELDS, references
 from layoutdiff.data.streaming import file_digest
 
 AUDIT = 'omissions.json'

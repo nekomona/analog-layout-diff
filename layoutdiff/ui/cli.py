@@ -7,10 +7,10 @@ from layoutdiff.data.history import History, read_json, atomic_json
 
 
 def live_dependency_check(snapshot, report):
-    from layoutdiff.virtuoso.dependencies import emit_warnings
+    from layoutdiff.eda.virtuoso.dependencies import emit_warnings
     try:
         from virtuoso_bridge import VirtuosoClient
-        from layoutdiff.virtuoso.adapter import VirtuosoAdapter
+        from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter
         adapter = VirtuosoAdapter(VirtuosoClient.from_env(), Path(report).parent / "artifacts")
         issues = adapter.check_dependencies(snapshot, emit=False)
     except Exception as exc:
@@ -114,7 +114,7 @@ def main(argv=None):
         print(apply(Snapshot(args.snapshot), args.patch, args.output, parent=args.parent, reverse=args.reverse, backend=args.backend).digest)
     elif args.command in {"gui-serve", "gui-stop", "gui-clean"}:
         from virtuoso_bridge import VirtuosoClient
-        from layoutdiff.virtuoso.adapter import checked
+        from layoutdiff.eda.virtuoso.adapter import checked
         client = VirtuosoClient.from_env()
         if checked(client.execute_skill("boundp('ALDRuntimeMenu)")) != "t":
             raise ValueError("Load the installed startup.il in Virtuoso CIW first; see docs/runtime/README.md")
@@ -127,7 +127,7 @@ def main(argv=None):
         print("Initialized", args.history)
     elif args.command in {"capture", "record", "restore"}:
         from virtuoso_bridge import VirtuosoClient
-        from layoutdiff.virtuoso.adapter import VirtuosoAdapter, coverage
+        from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, coverage
         artifacts = Path(args.history) / "captures" if args.command == "record" else Path(getattr(args, "snapshot", getattr(args, "output", "."))).resolve().parent / "artifacts"
         adapter = VirtuosoAdapter(VirtuosoClient.from_env(), artifacts,
                                   writable_library=getattr(args, "allow_library", "LAYOUT_DIFF_TEST"))
@@ -168,7 +168,7 @@ def main(argv=None):
     elif args.command == "apply":
         atomic_json(args.output, apply_diff(read_json(args.snapshot), read_json(args.commit), parent=args.parent, reverse=args.reverse))
     elif args.command == "commit":
-        from layoutdiff.virtuoso.adapter import coverage
+        from layoutdiff.eda.virtuoso.adapter import coverage
         history = History(args.history)
         head = read_json(history.path / "HEAD")
         snapshot = read_json(args.snapshot)
@@ -199,11 +199,11 @@ def main(argv=None):
             counts = Counter("add" if o["before"] is None else "delete" if o["after"] is None else "replace" for o in commit["operations"])
             print(commit["id"][:12], dict(counts), commit["message"])
     elif args.command == "coverage":
-        from layoutdiff.virtuoso.adapter import coverage
+        from layoutdiff.eda.virtuoso.adapter import coverage
         snapshot = read_json(args.snapshot)
         print(json.dumps({"kinds": dict(Counter(x["kind"] for x in snapshot["objects"].values())), "issues": coverage(snapshot)}, indent=2))
     elif args.command == "xor":
-        from layoutdiff.virtuoso.geometry import compare_gds
+        from layoutdiff.eda.virtuoso.geometry import compare_gds
         result = compare_gds(args.left, args.right, left_top=args.left_top, right_top=args.right_top)
         print(json.dumps(result, indent=2))
         return 0 if result["equal"] else 1

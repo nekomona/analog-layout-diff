@@ -5,14 +5,14 @@ import sys
 import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked, coverage
-from layoutdiff.virtuoso.sexpr import dumps as sk
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked, coverage
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk
 from layoutdiff.data.core import empty_snapshot, digest, diff, apply_diff
 from layoutdiff.data.storage import from_snapshot
 from layoutdiff.data.streampatch import create, apply
-from layoutdiff.virtuoso.geometry import export, compare_gds
+from layoutdiff.eda.virtuoso.geometry import export, compare_gds
 from layoutdiff.data.history import atomic_json
-from layoutdiff.virtuoso.support import UnsupportedContentError
+from layoutdiff.eda.virtuoso.support import UnsupportedContentError
 
 project = Path(__file__).resolve().parents[1]
 run = uuid.uuid4().hex[:8]

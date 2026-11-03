@@ -6,8 +6,8 @@ from layoutdiff.data.storage import from_snapshot, load
 from layoutdiff.data.streampatch import create, apply
 from layoutdiff.git import commit as gc
 from layoutdiff.git.store import GitSnapshots
-from layoutdiff.virtuoso.omissions import project, DETAILS
-from layoutdiff.virtuoso.support import coverage
+from layoutdiff.eda.virtuoso.omissions import project, DETAILS
+from layoutdiff.eda.virtuoso.support import coverage
 
 
 def records():

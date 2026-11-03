@@ -26,7 +26,7 @@ Content-addressed `layerBlockage`, `areaBlockage`,
 `snapBoundary`, `sitePattern` and `textDisplay` records share these containers
 and canonical identity rules. Geometric dimensions use integer DBU;
 site entries preserve order as `[siteName, [x, y], orientation]`. The full
-[field inventory and native behavior](../virtuoso/ANNOTATIONS.md)
+[field inventory and native behavior](../eda/virtuoso/ANNOTATIONS.md)
 is documented separately. Owner, parent and associate links contain canonical
 object keys (or the existing pin/instTerm aliases), never database handles.
 Property links add an ordered `associateProperty`/`ownerProperty` path from that
@@ -85,10 +85,10 @@ diff/apply. The returned native snapshot retains Virtuoso's actual parameter
 spelling and can therefore have a different raw hash from the committed
 snapshot. The decision and queried defaults are recorded in
 `readback_normalization_<build-id>.json` and the GUI's `review.json`.
-See [native via comparison](../virtuoso/VIA_DEFAULTS.md).
+See [native via comparison](../eda/virtuoso/VIA_DEFAULTS.md).
 MPP-specific native comparison rules are summarized in the
 [processing guide](../architecture/PROCESSING_PIPELINE.md#native-replay-and-readback)
-and [MPP findings](../virtuoso/MPP.md); none changes stored identity
+and [MPP findings](../eda/virtuoso/MPP.md); none changes stored identity
 or generic diff/apply semantics.
 
 Connectivity categories and group-boundary overlays are presentation data.
@@ -106,7 +106,7 @@ scope. They produce no records, group links or omission counts, so changes to
 them alone produce no diff. Physical member geometry and supported connectivity
 remain separate tracked records. Ordered figure-group counts/positions are
 renumbered over retained members. Replay omits the excluded topology and
-annotations. The [capture policy](../virtuoso/ROUTING_SCOPE.md)
+annotations. The [capture policy](../eda/virtuoso/ROUTING_SCOPE.md)
 defines this boundary. Generic diff/apply preserves the exact data supplied in
 existing snapshots; native replay separately enforces its supported scope.
 

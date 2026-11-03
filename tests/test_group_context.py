@@ -2,7 +2,7 @@ import copy
 from types import SimpleNamespace
 import pytest
 from layoutdiff.data.core import canonicalize
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter
 
 
 def snapshot(definition='lxImplicitBus'):

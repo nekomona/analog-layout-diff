@@ -2,12 +2,12 @@ import copy
 import json
 import pytest
 from layoutdiff.data.core import canonicalize, diff, apply_diff, encoded
-from layoutdiff.virtuoso.adapter import render
-from layoutdiff.virtuoso.support import coverage
+from layoutdiff.eda.virtuoso.adapter import render
+from layoutdiff.eda.virtuoso.support import coverage
 from layoutdiff.data.storage import from_snapshot
-from layoutdiff.virtuoso.native_equivalence import via_default_projection
+from layoutdiff.eda.virtuoso.native_equivalence import via_default_projection
 from layoutdiff.comparison.review import classify
-from layoutdiff.virtuoso.omissions import project
+from layoutdiff.eda.virtuoso.omissions import project
 
 
 def records():
@@ -101,7 +101,7 @@ def test_unchoppable_master_keeps_nil_and_replays_chopped_subparts():
 
 
 def test_native_chop_coordinates_are_dbu_and_cache_is_not_replayed():
-    from layoutdiff.virtuoso.mpp import capture_chop_holes
+    from layoutdiff.eda.virtuoso.mpp import capture_chop_holes
     first=[[3000,0],[2000,0]]; second=[[6000,2000],[6000,1000]]
     recipe={'nativeChopHoles':[[second,first],first]}
     capture_chop_holes(recipe)
@@ -112,7 +112,7 @@ def test_native_chop_coordinates_are_dbu_and_cache_is_not_replayed():
 
 
 def test_only_dangling_recipe_nets_are_cleanup_candidates():
-    from layoutdiff.virtuoso.mpp import cleanup_replay
+    from layoutdiff.eda.virtuoso.mpp import cleanup_replay
     raw=records(); raw[2]['mpp']['parts'][0]['netName']='VSS'
     assert cleanup_replay(raw)==[]  # Retain even empty checkpoint nets.
     raw[2]['mpp']['parts'][0]['netName']='deleted_net'

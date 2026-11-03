@@ -13,11 +13,11 @@ from PIL import Image
 
 from layoutdiff.data.core import apply_diff, canonicalize, diff, digest, empty_snapshot
 from layoutdiff.data.history import History, read_json
-from klayout_plugin.codec import (db, capture_layout, read_layout, reconstruct,
+from layoutdiff.eda.klayout.codec import (db, capture_layout, read_layout, reconstruct,
                                    validate_klayout, write_layout)
-from klayout_plugin.review import (DEFAULT_STYLE, build_review, classify, export_review,
+from layoutdiff.eda.klayout.review import (DEFAULT_STYLE, build_review, classify, export_review,
                                     load_style, review_commit, review_counts)
-from klayout_plugin.render_diff import render_image
+from layoutdiff.eda.klayout.render_diff import render_image
 
 
 def database():
@@ -271,14 +271,15 @@ def test_review_hierarchy_transforms_match_native_regions():
         assert (actual ^ expected[tuple(item["original"][:2])]).is_empty()
 
 
-def test_cli_full_flow_and_snapshot_helper(tmp_path):
-    root = Path(__file__).resolve().parents[2]
+@pytest.mark.parametrize('cli_module', ['layoutdiff.eda.klayout', 'klayout_plugin'])
+def test_cli_full_flow_and_snapshot_helper(tmp_path, cli_module):
+    root = Path(__file__).resolve().parents[1]
     input_file, after_file = tmp_path / "before.oas", tmp_path / "after.oas"
     before, after = visual_pair()
     write_layout(before, input_file); write_layout(after, after_file)
     history = tmp_path / "history"
 
-    def run(*args, module="klayout_plugin"):
+    def run(*args, module=cli_module):
         result = subprocess.run([sys.executable, "-m", module, *map(str, args)], cwd=root, capture_output=True, text=True)
         assert result.returncode == 0, result.stdout + result.stderr
         return result.stdout
@@ -293,15 +294,26 @@ def test_cli_full_flow_and_snapshot_helper(tmp_path):
     run("review", tmp_path / "review", "--history", history)
     assert (tmp_path / "review" / "review.png").is_file()
     run(tmp_path / "first.json", after_file, tmp_path / "helper.png", "--width", 800, "--height", 400,
-        module="klayout_plugin.render_diff")
+        module=cli_module + ".render_diff")
     assert (tmp_path / "helper.png").is_file()
 
 
 def test_gui_macro_xml_and_python_compile():
     import ast
     import xml.etree.ElementTree as ET
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[1] / 'layoutdiff/eda/klayout'
     macro = ET.parse(root / "analog_layout_diff.lym").getroot()
     assert macro.findtext("interpreter") == "python"
     ast.parse(macro.findtext("text"))
     ast.parse((root / "gui.py").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize('module', ['layoutdiff.eda.klayout.generate_demo', 'klayout_plugin.generate_demo'])
+def test_demo_entrypoints_generate_verified_snapshots(tmp_path, module):
+    output = tmp_path / 'demo'
+    result = subprocess.run([sys.executable, '-m', module, str(output)],
+                            cwd=Path(__file__).resolve().parents[1], text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = read_json(output / 'verification.json')
+    assert report['exact_native_reconstruction'] and report['repeated_png_bytes_equal']
+    assert (output / 'review/review.png').is_file()

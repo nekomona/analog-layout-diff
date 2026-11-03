@@ -2,7 +2,7 @@ import copy
 from pathlib import Path
 import pytest
 from layoutdiff.data.core import canonicalize
-from layoutdiff.virtuoso.adapter import coverage, render, VirtuosoAdapter, normalize
+from layoutdiff.eda.virtuoso.adapter import coverage, render, VirtuosoAdapter, normalize
 
 
 def test_known_unsupported_data_blocks_reconstruction():
@@ -62,7 +62,7 @@ def test_incomplete_custom_snapshots_require_recapture(extensions):
 @pytest.mark.parametrize("filename", ["reader.il", "hierarchy.il", "gui.il", "browser.il", "runtime.il"])
 def test_reader_has_balanced_parentheses(filename):
     # SKILL's loader can silently repair an unterminated procedure; reject it locally.
-    owner = 'virtuoso' if filename in {'reader.il', 'hierarchy.il'} else 'ui'
+    owner = 'eda/virtuoso' if filename in {'reader.il', 'hierarchy.il'} else 'ui'
     source = Path(__file__).parents[1].joinpath('layoutdiff', owner, 'skill', filename).read_text()
     depth, string, escape, comment = 0, False, False, False
     for ch in source:

@@ -6,8 +6,8 @@ import warnings
 from pathlib import Path
 from layoutdiff.data.core import canonicalize
 from layoutdiff.data.history import atomic_json
-from layoutdiff.virtuoso.sexpr import loads, dumps as sk
-from layoutdiff.virtuoso.paths import scratch
+from layoutdiff.eda.virtuoso.sexpr import loads, dumps as sk
+from layoutdiff.eda.virtuoso.paths import scratch
 
 
 class DependencyWarning(UserWarning):
@@ -74,7 +74,7 @@ class HierarchyReader:
         if paths:
             try:
                 if getattr(self.client, "layoutdiff_local_files", False):
-                    from layoutdiff.virtuoso.hash_views import fingerprint
+                    from layoutdiff.eda.virtuoso.hash_views import fingerprint
                     hashed = {p: fingerprint(p) for p in paths}
                 elif not self.helper:
                     helper = scratch(self.client, "ald_hash_" + uuid.uuid4().hex + ".py")

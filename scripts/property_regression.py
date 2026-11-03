@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from explore import ROOT
 from inventory import LIB
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter
 from layoutdiff.data.core import empty_snapshot, diff, apply_diff, digest
 from layoutdiff.data.history import atomic_json
 

@@ -5,10 +5,10 @@ import sys
 import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked, coverage
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked, coverage
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 from layoutdiff.data.core import diff, digest, apply_diff
-from layoutdiff.virtuoso.geometry import export, compare_gds
+from layoutdiff.eda.virtuoso.geometry import export, compare_gds
 from layoutdiff.data.history import atomic_json
 from layoutdiff.data.streampatch import create, apply
 

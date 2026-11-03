@@ -7,8 +7,8 @@ import time
 import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import checked, VirtuosoAdapter
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import checked, VirtuosoAdapter
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 from layoutdiff.data.history import atomic_json
 from layoutdiff.data.core import digest
 

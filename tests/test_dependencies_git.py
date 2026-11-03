@@ -3,11 +3,11 @@ import json
 from pathlib import Path
 import pytest
 from layoutdiff.data.core import canonicalize, diff, apply_diff, empty_snapshot
-from layoutdiff.virtuoso.dependencies import compare_dependencies, native_snapshot
+from layoutdiff.eda.virtuoso.dependencies import compare_dependencies, native_snapshot
 from layoutdiff.git.tools import git, setup, extract, textconv
-from layoutdiff.virtuoso.hash_views import fingerprint
+from layoutdiff.eda.virtuoso.hash_views import fingerprint
 from layoutdiff.data.history import atomic_json, History
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, coverage
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, coverage
 
 
 def dep(hash_value="a" * 64):

@@ -9,8 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from virtuoso_bridge import VirtuosoClient
 from virtuoso_bridge.virtuoso import x11
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 from layoutdiff.data.history import atomic_json
 
 PROJECT = Path(__file__).resolve().parents[1]

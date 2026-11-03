@@ -25,7 +25,7 @@ def replay_items(snapshot):
     # make an arbitrary input-order tie-breaker observably change metadata.
     ordinary = [(k, r) for k, r in items if r['kind'] not in LINK_FIELDS]
     linked = {k: r for k, r in items if r['kind'] in LINK_FIELDS}
-    from layoutdiff.virtuoso.logical_groups import pin_key
+    from layoutdiff.eda.virtuoso.logical_groups import pin_key
     aliases = {pin_key(r['pin']['term'], r['pin']['name']): k for k,r in items
                if r.get('pin') and r['pin'].get('primary')}
     graph = {k: [aliases.get(ref, ref) for ref in references(r) if aliases.get(ref, ref) in linked]

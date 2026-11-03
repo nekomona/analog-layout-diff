@@ -23,7 +23,7 @@ Use canonical imports such as `layoutdiff.data.core` and `layoutdiff.git.commit`
 Package imports must not start processes or connect to a live database.
 
 ```sh
-python -m pytest tests klayout_plugin/tests -q --basetemp=.test-tmp-run
+python -m pytest tests -q --basetemp=.test-tmp-run
 python scripts/check_docs.py
 python scripts/check_publication.py
 ```
@@ -58,8 +58,9 @@ to remove generated evidence, caches and temporary repositories. Cleanup preserv
 ## Documentation maintenance
 
 Organize reference material under the owning package: `data/`, `comparison/`,
-`virtuoso/`, `git/`, `ui/`, and `runtime/`. Use `architecture/` for flows spanning
-packages, and separate directories for the optional C++ and KLayout components. Findings should
+`eda/`, `git/`, `ui/`, and `runtime/`. Keep tool-specific guides under
+`eda/virtuoso/` and `eda/klayout/`. Use `architecture/` for flows spanning
+packages and `native-performance/` for the optional C++ component. Findings should
 describe reusable API behavior without source-design names, PDK recipes, private
 paths, session IDs, checkpoint IDs, dates, or measured production-layout data.
 Use synthetic examples and relative Markdown links. Run link and publication

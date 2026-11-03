@@ -1,11 +1,12 @@
 # KLayout input, history and colored review
 
-This isolated integration reads GDS/OASIS or a live KLayout `Layout`, records a
+The `layoutdiff.eda.klayout` adapter reads GDS/OASIS or a live KLayout `Layout`, records a
 selected cell and its reachable hierarchy in the existing checked `History`,
 reconstructs static layouts, and opens a disposable colored review in KLayout.
 It also renders a deterministic PNG with KLayout's real `LayoutView` renderer.
-No Virtuoso connection is needed. Implementation and tests are under
-`klayout_plugin/`; the shared `layoutdiff` package is imported unchanged.
+No Virtuoso connection is needed. Implementation is under
+`layoutdiff/eda/klayout/` and regressions are in `tests/test_klayout.py`.
+It uses the shared canonical data and history packages.
 Documentation lives under `docs/`; generated outputs are ignored by Git.
 
 Gray is unchanged content, orange is changed content, green is added content,
@@ -14,18 +15,27 @@ This example is synthetic geometry, not a PDK-verified circuit.
 
 ## Command-line use
 
-Start in `/path/to/analog-layout-diff`:
+Install from `/path/to/analog-layout-diff` into a virtual environment:
+
+```sh
+uv venv .venv
+uv pip install --python .venv/Scripts/python.exe -e ".[klayout]"
+```
+
+Use `.venv/bin/python` on Linux. The adapter, macro and example style are
+included in the distribution; the `klayout` extra adds standalone KLayout and
+Pillow for image rendering. With that environment's Python:
 
 ```powershell
 $py = '.venv\Scripts\python.exe'
-& $py -m klayout_plugin capture before.gds before.json --top TOP
-& $py -m klayout_plugin init my-history
-& $py -m klayout_plugin commit my-history before.json -m 'Initial stream snapshot'
-& $py -m klayout_plugin commit my-history after.oas --top TOP -m 'Move device and reroute'
-& $py -m klayout_plugin log my-history
-& $py -m klayout_plugin replay my-history latest.json
-& $py -m klayout_plugin restore my-history restored-new.oas
-& $py -m klayout_plugin review new-review --history my-history
+& $py -m layoutdiff.eda.klayout capture before.gds before.json --top TOP
+& $py -m layoutdiff.eda.klayout init my-history
+& $py -m layoutdiff.eda.klayout commit my-history before.json -m 'Initial stream snapshot'
+& $py -m layoutdiff.eda.klayout commit my-history after.oas --top TOP -m 'Move device and reroute'
+& $py -m layoutdiff.eda.klayout log my-history
+& $py -m layoutdiff.eda.klayout replay my-history latest.json
+& $py -m layoutdiff.eda.klayout restore my-history restored-new.oas
+& $py -m layoutdiff.eda.klayout review new-review --history my-history
 ```
 
 `replay`, `restore`, and history `review` accept `--at FULL_COMMIT_SHA256`.
@@ -38,9 +48,9 @@ the parent's `analog-layout-diff/1` linear, single-parent history.
 Direct comparison and the small image helper do not need a history:
 
 ```powershell
-& $py -m klayout_plugin review new-review --before before.gds --after after.oas --before-top TOP --after-top TOP
-& $py -m klayout_plugin.render_diff before.gds after.oas diff.png --before-top TOP --after-top TOP
-& $py -m klayout_plugin.render_diff before.json after.json diff.png --width 1400 --height 720
+& $py -m layoutdiff.eda.klayout review new-review --before before.gds --after after.oas --before-top TOP --after-top TOP
+& $py -m layoutdiff.eda.klayout.render_diff before.gds after.oas diff.png --before-top TOP --after-top TOP
+& $py -m layoutdiff.eda.klayout.render_diff before.json after.json diff.png --width 1400 --height 720
 ```
 
 Use `EMPTY` as the before input to review an initial snapshot. JSON inputs
@@ -68,10 +78,10 @@ The original layer map is also in `review.json`. The generated review is marked
 with the layout property `layoutdiff.review` so the GUI refuses to commit it as
 a source design.
 
-For headless rendering and tests, use `uv venv` and `uv pip install --python <venv-python>
-klayout pillow pytest`; never install globally. Run from the directory containing
-both `layoutdiff/` and `klayout_plugin/`. This isolated folder is deliberately not
-added to the parent packaging configuration.
+For tests, install `.[verify]` in the virtual environment. Installed commands
+can run outside the checkout. The former `python -m klayout_plugin` and
+`python -m klayout_plugin.render_diff` commands remain compatibility wrappers;
+use the `layoutdiff.eda.klayout` paths in new integrations.
 
 ## KLayout GUI
 
@@ -80,10 +90,11 @@ The macro uses embedded `pya`, so the desktop GUI does not require pip's KLayout
 package or Pillow. The Python environment used for headless images is separate.
 
 1. Open the source layout in desktop KLayout and select the cell to capture.
-2. Open Macro Development, add this `klayout_plugin` directory as a macro
+2. Open Macro Development, add `layoutdiff/eda/klayout` as a macro
    location, and run `analog_layout_diff.lym`. Keep the macro in this folder.
    If it is copied elsewhere, set `ANALOG_LAYOUT_DIFF_ROOT` to the directory
-   containing `layoutdiff/` and `klayout_plugin/` before starting KLayout.
+   containing `layoutdiff/` before starting KLayout. This can be a checkout root
+   or the installed package's `site-packages` directory.
 3. Use **Tools → Analog Layout Diff → Commit / history / review**.
 4. Initialize a named new history directory, or choose an existing one. Enter a
    message and select **Commit selected source cell**. Unsaved in-memory edits
@@ -99,7 +110,7 @@ For a direct one-session load, run this in KLayout's Python console:
 ```python
 import sys
 sys.path.insert(0, '/path/to/analog-layout-diff')
-from klayout_plugin.gui import install
+from layoutdiff.eda.klayout.gui import install
 install()
 ```
 
@@ -112,7 +123,7 @@ outside the supported subset rather than emitting a partial snapshot.
 Desktop integration requires separate verification of menu insertion, dialogs,
 file choosers and tab switching with embedded `pya`. Database/view API tests alone
 do not establish interactive GUI behavior. See
-[verification methodology](../development/VERIFICATION.md).
+[verification methodology](../../development/VERIFICATION.md).
 
 ## Classification and style
 
@@ -140,7 +151,7 @@ change can be recorded/replayed, but requires explicit normalization before
 visual comparison. The default 250,000-object occurrence budget fails early
 for very large hierarchies/arrays; override it with CLI `--limit` if needed.
 
-Copy [style.example.json](../../klayout_plugin/style.example.json), then pass `--style custom.json`
+Copy [style.example.json](../../../layoutdiff/eda/klayout/style.example.json), then pass `--style custom.json`
 to `review` or the image helper. The GUI's **Load review colors and styles**
 action loads the same file for subsequent reviews. Partial overrides are valid:
 
@@ -184,9 +195,9 @@ an exact archive of stream syntax or unmodeled database state.
 ## Tests and evidence
 
 ```powershell
-& $py -m pytest klayout_plugin/tests -q --basetemp=klayout_plugin/.test-tmp -o cache_dir=klayout_plugin/.pytest_cache
-& $py -m klayout_plugin.generate_demo klayout_plugin/evidence/new-demo
+& $py -m pytest tests/test_klayout.py -q --basetemp=.cache/klayout-tests
+& $py -m layoutdiff.eda.klayout.generate_demo .cache/klayout-demo
 ```
 
 The demo uses synthetic geometry. Verify snapshot equality, exported geometry
-and deterministic rendering separately; see [verification](../development/VERIFICATION.md).
+and deterministic rendering separately; see [verification](../../development/VERIFICATION.md).

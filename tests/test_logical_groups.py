@@ -1,9 +1,9 @@
 import copy
 import pytest
-from layoutdiff.virtuoso.adapter import normalize, coverage, render
+from layoutdiff.eda.virtuoso.adapter import normalize, coverage, render
 from layoutdiff.data.core import canonicalize, diff, apply_diff, empty_snapshot
 from layoutdiff.data.storage import from_snapshot
-from layoutdiff.virtuoso.logical_groups import resolve_records
+from layoutdiff.eda.virtuoso.logical_groups import resolve_records
 
 
 def group(token, name='same', members=(), **fields):

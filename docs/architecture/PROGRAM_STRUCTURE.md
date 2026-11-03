@@ -28,11 +28,15 @@ the tables and individual workflows below expand each block.
 flowchart TB
     RT["runtime: processes and resource lifetime"]
     UI["ui: CLI, toolbar requests, browser, review and restore"]
-    VI["virtuoso: native layout interface"]
+    subgraph EDA["eda: design-tool adapters"]
+        VI["virtuoso: native layout interface"]
+        KL["klayout: static-layout input, review and rendering"]
+    end
     GI["git: snapshot history and commit interface"]
     CP["comparison: matching, categories and review classification"]
     DT["data: canonical model, storage and exact diff/apply"]
     OA["External Cadence OA / ROD"]
+    KB["External KLayout / pya bindings"]
     GITCLI["External Git executable"]
     GIT["Design Git repository"]
     CPP["Optional C++ kernel"]
@@ -41,9 +45,11 @@ flowchart TB
     UI --> GI
     UI --> CP
     VI --> DT
+    KL --> DT
     GI --> DT
     CP --> DT
     VI <-->|"SKILL via bridge"| OA
+    KL <-->|"database / view APIs"| KB
     GI <-->|"Git commands"| GITCLI
     GITCLI --> GIT
     DT -->|"validated wire protocol"| CPP
@@ -51,16 +57,18 @@ flowchart TB
     classDef external fill:#fff0ce,stroke:#a36b00,color:#533700,stroke-width:1.5px
     classDef optional fill:#f1e7ff,stroke:#8050a0,color:#4a226b,stroke-width:1.5px,stroke-dasharray:5 3
     classDef artifact fill:#f0f2f5,stroke:#73808c,color:#303945,stroke-width:1.5px
-    class RT,UI,VI,GI,CP,DT program
-    class OA,GITCLI external
+    class RT,UI,VI,KL,GI,CP,DT program
+    class OA,KB,GITCLI external
+    style EDA fill:#e8f1ff,stroke:#285a9c,color:#12335b
     class CPP optional
     class GIT artifact
 ```
 
 Arrows show the primary control/data relationships, not every Python import.
 `data` is independent of Cadence, Git and the GUI. `comparison` derives display
-meaning without changing stored identity. `virtuoso` and `git` are separate
-interfaces over that common data. `ui` combines them into user workflows;
+meaning without changing stored identity. `eda` owns the Virtuoso and KLayout
+interfaces over that common data. `git` owns snapshot history and transactions.
+`ui` combines native capture, comparison and Git into user workflows;
 `runtime` owns the host processes and temporary-resource lifetime.
 
 ## Source layout and entry points
@@ -71,6 +79,7 @@ layoutdiff/
   __main__.py              python -m layoutdiff
   cli.py                  Compatibility console-entry facade
   git_driver.py           Compatibility for existing textconv configurations
+  virtuoso.py             Compatibility for former public adapter exports
   data/
     core.py               Canonical values, identities, exact reference diff/apply
     storage.py            Streaming v2 snapshot codec and validation
@@ -87,20 +96,31 @@ layoutdiff/
     review_groups.py      Group changes and boundary targets
     categories.py         Category rules, counts and detail formatting
     changeindex.py        Disk-backed category index and paging
-  virtuoso/
-    adapter.py            Capture, replay and native readback service
-    dependencies.py       Hierarchy hints and nonblocking drift warnings
-    hash_views.py         Saved OA file fingerprint helper
-    logical_groups.py     Native-reference resolution
-    oa_content.py         Annotation relationships and replay ordering
-    mpp.py                Editable ROD recipe handling
-    support.py            Supported-content validation
-    omissions.py          Dependency-aware incomplete-checkpoint projection
-    native_equivalence.py Narrow native comparison rules
-    sexpr.py              Data-only SKILL transport encoding/parsing
-    paths.py              Session-owned native scratch paths
-    geometry.py           XStream export and independent KLayout GDS checks
-    skill/                reader.il, hierarchy.il
+  eda/
+    virtuoso/
+      adapter.py          Capture, replay and native readback service
+      dependencies.py     Hierarchy hints and nonblocking drift warnings
+      hash_views.py       Saved OA file fingerprint helper
+      logical_groups.py   Native-reference resolution
+      oa_content.py       Annotation relationships and replay ordering
+      mpp.py              Editable ROD recipe handling
+      support.py          Supported-content validation
+      omissions.py        Dependency-aware incomplete-checkpoint projection
+      native_equivalence.py  Narrow native comparison rules
+      sexpr.py            Data-only SKILL transport encoding/parsing
+      paths.py            Session-owned native scratch paths
+      geometry.py         XStream export and independent KLayout GDS checks
+      skill/              reader.il, hierarchy.il
+    klayout/
+      __main__.py         python -m layoutdiff.eda.klayout
+      api.py              Embedded pya / standalone binding selection
+      codec.py            Static layout capture and reconstruction
+      review.py           Review geometry and styles
+      gui.py              KLayout desktop actions and dialogs
+      render_diff.py      Headless image renderer
+      generate_demo.py    Synthetic example generator
+      analog_layout_diff.lym  Desktop bootstrap macro
+      style.example.json  Example review style
   git/
     store.py              Immutable Git snapshot history reads
     commit.py             Preview and isolated Git commit transaction
@@ -118,19 +138,21 @@ layoutdiff/
     workspace.py          Owned temporary bundles and reaping
 ```
 
-`native-performance/` remains the optional C++ side project;
-`klayout_plugin/` remains a separate static-layout frontend. `scripts/`, `tests/`
+`native-performance/` remains the optional C++ side project. Root
+`klayout_plugin/` contains compatibility entry points for the packaged KLayout
+adapter; its implementation lives in `layoutdiff/eda/klayout/`. `scripts/`, `tests/`
 and `docs/` keep their operational roles outside the installed package.
 
 The startup file is generated by [install_runtime.py](../../scripts/install_runtime.py).
 It loads UI SKILL from `ui/skill/`; the adapter loads native database SKILL
-from `virtuoso/skill/`. Redeploy through the installer when updating the runtime.
+from `eda/virtuoso/skill/`. Redeploy through the installer when updating the runtime.
 
 ## Python services and data-processing components
 
 | Package | Responsibility | Main entry points |
 | --- | --- | --- |
-| `virtuoso` | Native capture/replay, scope, ROD/OA relationships, readback, hierarchy and GDS verification | [VirtuosoAdapter](../../layoutdiff/virtuoso/adapter.py), [native resources](../../layoutdiff/virtuoso/skill/reader.il) |
+| `eda.virtuoso` | Native capture/replay, scope, ROD/OA relationships, readback, hierarchy and GDS verification | [VirtuosoAdapter](../../layoutdiff/eda/virtuoso/adapter.py), [native resources](../../layoutdiff/eda/virtuoso/skill/reader.il) |
+| `eda.klayout` | Static capture/reconstruction, desktop review and image rendering | [codec](../../layoutdiff/eda/klayout/codec.py), [GUI](../../layoutdiff/eda/klayout/gui.py), [renderer](../../layoutdiff/eda/klayout/render_diff.py) |
 | `git` | Git snapshot paths/history, stale preview checks, isolated commit and semantic diff driver | [GitSnapshots](../../layoutdiff/git/store.py), [prepare_v2 / commit](../../layoutdiff/git/commit.py) |
 | `data` | Typed canonical state, integrity, v1/v2 storage, exact operations, standalone chains and acceleration | [core](../../layoutdiff/data/core.py), [Snapshot](../../layoutdiff/data/storage.py), [streaming](../../layoutdiff/data/streaming.py) |
 | `comparison` | Inferred correspondence, Moved/stretched versus Modified net, categories, paging and group boundaries | [ChangeIndex](../../layoutdiff/comparison/changeindex.py), [classify](../../layoutdiff/comparison/review.py), [pairs](../../layoutdiff/comparison/matching.py) |
@@ -217,7 +239,7 @@ includes the optional two-step omission consent and one-use tokens.
 ## Review and restore interaction
 
 Read selected states through `git`, classify through `comparison`, reconstruct
-and verify through `virtuoso`, then open the `ui` overlays. `runtime` retains
+and verify through `eda.virtuoso`, then open the `ui` overlays. `runtime` retains
 the session resources until their native leases end. See the
 [review/restore sequence](../ui/INTERACTION_SEQUENCES.md#review-and-restore-interaction).
 
@@ -246,20 +268,20 @@ whether an OA cellview is still referenced. The [runtime guide](../runtime/READM
 documents controls and the [verification index](../development/VERIFICATION.md) records the
 tested lifecycle boundaries.
 
-## Separate KLayout frontend
+## KLayout adapter and frontend
 
 ```mermaid
 flowchart LR
-    INPUT["GDS/OAS or KLayout Layout"] --> CODEC["klayout_plugin/codec.py"]
+    INPUT["GDS/OAS or KLayout Layout"] --> CODEC["layoutdiff/eda/klayout/codec.py"]
     MACRO["Optional KLayout frontend: macro / gui.py"] --> CODEC
     KL["External KLayout / pya runtime"] -->|"database / view APIs"| CODEC
     CODEC --> STATIC["klayout-static/1 snapshot"]
     STATIC --> HISTORY["layoutdiff core and standalone History"]
-    HISTORY --> REVIEW["klayout_plugin/review.py"]
+    HISTORY --> REVIEW["layoutdiff/eda/klayout/review.py"]
     REVIEW --> VIEW["Separate KLayout review tab / OASIS"]
     REVIEW --> RENDER["render_diff.py: image renderer"]
     RENDER --> IMAGE["Snapshot image"]
-    EXPORT["Virtuoso source / replay GDS exports"] --> XOR["layoutdiff/virtuoso/geometry.py: KLayout geometry XOR and labels"]
+    EXPORT["Virtuoso source / replay GDS exports"] --> XOR["layoutdiff/eda/virtuoso/geometry.py: KLayout geometry XOR and labels"]
     classDef program fill:#e8f1ff,stroke:#285a9c,color:#12335b,stroke-width:1.5px
     classDef external fill:#fff0ce,stroke:#a36b00,color:#533700,stroke-width:1.5px
     classDef optional fill:#f1e7ff,stroke:#8050a0,color:#4a226b,stroke-width:1.5px,stroke-dasharray:5 3
@@ -271,15 +293,15 @@ flowchart LR
 ```
 
 `api.py` chooses the embedded `pya` binding or standalone KLayout modules.
-`codec.py` captures/reconstructs reachable static cells; `klayout_plugin/review.py` creates
+`codec.py` captures/reconstructs reachable static cells; `layoutdiff/eda/klayout/review.py` creates
 review geometry and styles; `render_diff.py` renders an image through KLayout's
 view API. This frontend uses its documented standalone history flow, not the
 Virtuoso `GuiWorker`/bridge/runtime. Its static snapshot marker keeps it distinct
 from native OA snapshots even though it reuses canonical core/history helpers.
 It cannot recover native PCell generators or OA connectivity from GDS. See
-[KLayout architecture and limits](../klayout_plugin/README.md#snapshot-boundary-and-limitations).
+[KLayout architecture and limits](../eda/klayout/README.md#snapshot-boundary-and-limitations).
 
-[virtuoso/geometry.py](../../layoutdiff/virtuoso/geometry.py) uses KLayout separately as an
+[eda/virtuoso/geometry.py](../../layoutdiff/eda/virtuoso/geometry.py) uses KLayout separately as an
 independent verifier of Virtuoso GDS exports. This verification path does not
 convert native OA snapshots into the static plugin schema or supply an alternate
 native replay implementation.
@@ -298,10 +320,14 @@ currently shipped by this project.
 ## Public entry points
 
 Use package-qualified internal imports such as `layoutdiff.data.core`,
-`layoutdiff.git.commit`, `layoutdiff.ui.worker` and `layoutdiff.virtuoso.adapter`.
+`layoutdiff.git.commit`, `layoutdiff.ui.worker` and `layoutdiff.eda.virtuoso.adapter`.
 The public `layoutdiff` diff/apply helpers, `layout-diff`, `python -m layoutdiff`,
-`python -m layoutdiff.runtime`, and `layoutdiff.virtuoso` adapter exports are
-available. Root CLI/textconv facades delegate to their owning packages.
+`python -m layoutdiff.runtime`, and `layoutdiff.eda.virtuoso` adapter exports are
+available. KLayout uses `python -m layoutdiff.eda.klayout` and
+`python -m layoutdiff.eda.klayout.render_diff`. Root CLI/textconv facades,
+`layoutdiff.virtuoso` public exports and `klayout_plugin` entry points delegate
+to their owning packages. Internal imports must use the canonical paths;
+former `layoutdiff.virtuoso.*` submodules have moved under `layoutdiff.eda`.
 
 ## Documentation by component
 
@@ -309,12 +335,13 @@ available. Root CLI/textconv facades delegate to their owning packages.
 | --- | --- |
 | `data` | [Data model, formats, streams and acceleration](../data/README.md) |
 | `comparison` | [Matching, classification, groups and paging](../comparison/README.md) |
-| `virtuoso` | [Capture, coverage and native replay](../virtuoso/README.md) |
+| `eda` | [Design-tool adapters](../eda/README.md) |
+| `eda.virtuoso` | [Capture, coverage and native replay](../eda/virtuoso/README.md) |
+| `eda.klayout` | [Static-layout tools](../eda/klayout/README.md) |
 | `git` | [Snapshot history and commit transactions](../git/README.md) |
 | `ui` | [CLI, toolbar, browser, review and restore](../ui/README.md) |
 | `runtime` | [Deployment, process ownership and cleanup](../runtime/README.md) |
 | Optional C++ component | [Native performance backend](../native-performance/README.md) |
-| Separate KLayout frontend | [Static-layout tools](../klayout_plugin/README.md) |
 
 Cross-component flows live in [the processing guide](PROCESSING_PIPELINE.md) and
 [UI interaction sequences](../ui/INTERACTION_SEQUENCES.md).

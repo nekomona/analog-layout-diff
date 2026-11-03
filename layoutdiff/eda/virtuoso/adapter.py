@@ -7,10 +7,10 @@ from itertools import chain
 from pathlib import Path
 
 from layoutdiff.data.core import canonicalize, validate
-from layoutdiff.virtuoso.sexpr import loads, dumps as sk
-from layoutdiff.virtuoso.paths import scratch
-from layoutdiff.virtuoso.support import SUPPORTED, coverage, checked_records
-from layoutdiff.virtuoso.dependencies import HierarchyReader, native_snapshot, dependency_records, compare_dependencies, emit_warnings
+from layoutdiff.eda.virtuoso.sexpr import loads, dumps as sk
+from layoutdiff.eda.virtuoso.paths import scratch
+from layoutdiff.eda.virtuoso.support import SUPPORTED, coverage, checked_records
+from layoutdiff.eda.virtuoso.dependencies import HierarchyReader, native_snapshot, dependency_records, compare_dependencies, emit_warnings
 
 BOOKKEEPING = {"instance#", "pin#", "lastSavedExtractCounter"}
 
@@ -45,7 +45,7 @@ def normalized_records(records):
         r["props"] = sorted_props(r.get("props"))
         if r.get('mpp'):
             from layoutdiff.data.core import encoded
-            from layoutdiff.virtuoso.mpp import capture_chop_holes
+            from layoutdiff.eda.virtuoso.mpp import capture_chop_holes
             r['mpp'] = dict(r['mpp'])
             capture_chop_holes(r['mpp'])
             r['mpp']['parts'] = sorted((dict(p) for p in r['mpp']['parts'] or []), key=encoded)
@@ -74,7 +74,7 @@ def capture_records(records):
         return
     records = chain([first], records)
     if '_captureId' in first:
-        from layoutdiff.virtuoso.logical_groups import resolve_records
+        from layoutdiff.eda.virtuoso.logical_groups import resolve_records
         yield from resolve_records(records)
     else:
         yield from records
@@ -137,7 +137,7 @@ class VirtuosoAdapter:
         try:
             store = write_records(records(), folder / (token + ".layout"))
             if allow_unsupported:
-                from layoutdiff.virtuoso.omissions import project
+                from layoutdiff.eda.virtuoso.omissions import project
                 import shutil
                 full = store
                 try:
@@ -147,7 +147,7 @@ class VirtuosoAdapter:
                     full.close()
                     shutil.rmtree(full.path)
         except BaseException as exc:
-            from layoutdiff.virtuoso.support import UnsupportedContentError
+            from layoutdiff.eda.virtuoso.support import UnsupportedContentError
             if owner and isinstance(exc, UnsupportedContentError) and exc.report.is_relative_to(folder):
                 import shutil
                 retained = self.artifacts / (token + '.unsupported.jsonl')
@@ -270,7 +270,7 @@ class VirtuosoAdapter:
         if not equal and any(r['kind'] == 'stdVia' or r.get('mpp') for r in snapshot['objects'].values()):
             # IC23.1 dbCreateVia omits redundant defaults. Compare only row/column
             # overrides proven equal to this destination's viaDef defaults.
-            from layoutdiff.virtuoso.native_equivalence import via_default_projection, mpp_path_cache_aliases
+            from layoutdiff.eda.virtuoso.native_equivalence import via_default_projection, mpp_path_cache_aliases
             names = sorted({r['viaDef'] for state in (snapshot, actual)
                             for r in state['objects'].values() if r['kind'] == 'stdVia'})
             values = loads(checked(self.client.execute_skill(
@@ -330,8 +330,8 @@ def replay_source(commands, function, chunk_size=200):
 
 
 def render(snapshot, *, review_token=None):
-    from layoutdiff.virtuoso.logical_groups import pin_key, inst_term_key
-    from layoutdiff.virtuoso.oa_content import LINK_FIELDS, replay_items
+    from layoutdiff.eda.virtuoso.logical_groups import pin_key, inst_term_key
+    from layoutdiff.eda.virtuoso.oa_content import LINK_FIELDS, replay_items
     records = list(snapshot["objects"].values())
     has_logical_groups = any(record['kind'] == 'group' or record['kind'] in LINK_FIELDS for record in records)
     meta = next(r for r in records if r["kind"] == "cell")
@@ -362,7 +362,7 @@ def render(snapshot, *, review_token=None):
                 'figures["cell:"]=cv',
                 f"cv~>DBUPerUU={float(dbu)!r} cv~>userUnits={sk(meta['units'])} cv~>cellType={sk(meta['cellType'])}"]
     commands += prop_cmds("cv", meta["props"])
-    from layoutdiff.virtuoso.mpp import prepare_replay, figure_expression
+    from layoutdiff.eda.virtuoso.mpp import prepare_replay, figure_expression
     mpp_commands = prepare_replay(records, dim)
     # ROD connectivity writes can propagate properties to generated members,
     # including members visited earlier. Restore MPP properties after ordinary
@@ -534,7 +534,7 @@ def render(snapshot, *, review_token=None):
             for member in r['members']:
                 commands.append(f"gm=dbAddObjectToGroup(figures[{sk(key)}] figures[{sk(member['target'])}]) unless(gm error(\"Logical group membership failed\"))")
                 commands += prop_cmds('gm', member['props'])
-    from layoutdiff.virtuoso.mpp import cleanup_replay
+    from layoutdiff.eda.virtuoso.mpp import cleanup_replay
     commands += cleanup_replay(records)
     commands.append("t)")
     return commands

@@ -5,8 +5,8 @@ import random
 import pytest
 
 from layoutdiff.data.core import canonicalize, diff, apply_diff, empty_snapshot
-from layoutdiff.virtuoso.adapter import normalize, render
-from layoutdiff.virtuoso.support import coverage, checked_records, UnsupportedContentError
+from layoutdiff.eda.virtuoso.adapter import normalize, render
+from layoutdiff.eda.virtuoso.support import coverage, checked_records, UnsupportedContentError
 from layoutdiff.data.storage import from_snapshot
 from layoutdiff.data.streampatch import create, apply
 from layoutdiff.comparison.categories import CategoryDiff, category

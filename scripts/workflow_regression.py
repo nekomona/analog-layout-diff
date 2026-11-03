@@ -5,8 +5,8 @@ import shlex
 import time
 import uuid
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
 from layoutdiff.data.history import atomic_json
 
 c = VirtuosoClient.from_env()

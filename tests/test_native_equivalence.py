@@ -1,7 +1,7 @@
 import copy
 import pytest
 from layoutdiff.data.core import canonicalize, digest
-from layoutdiff.virtuoso.native_equivalence import via_default_projection, mpp_path_cache_aliases
+from layoutdiff.eda.virtuoso.native_equivalence import via_default_projection, mpp_path_cache_aliases
 
 
 DEFAULTS = {'V1': {'cutRows': 1, 'cutColumns': 1}}

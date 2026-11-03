@@ -37,8 +37,8 @@ without pretending to have the source name or native handles.
 | ROD multipart paths | `mpp` recipe on the master path; `mppOwner` on generated figures | Recipe and exact generated geometry both matter; no separate OA MPP collection |
 | Hierarchy hints | One `dependency` per descendant library/cell/view | Fingerprints and dirty hints, without archiving child contents |
 
-The [category survey](../virtuoso/COVERAGE.md) lists supported fields and remaining
-coverage. The [Virtuoso guide](../virtuoso/README.md) covers native API behavior.
+The [category survey](../eda/virtuoso/COVERAGE.md) lists supported fields and remaining
+coverage. The [Virtuoso guide](../eda/virtuoso/README.md) covers native API behavior.
 
 ## Coordinates, values and properties
 
@@ -98,7 +98,7 @@ MPP omission is atomic. Unsupported alignment, custom handles, subpart pins or
 terminals, custom subpart names or an unsupported member can remove the entire
 MPP from a user-confirmed incomplete checkpoint. A snapshot without recipes reconstructs flattened geometry; missing editing
 semantics cannot be inferred.
-See [MPP findings](../virtuoso/MPP.md).
+See [MPP findings](../eda/virtuoso/MPP.md).
 
 ## Capture scope and external dependencies
 
@@ -106,7 +106,7 @@ Routes, markers and Steiners are deliberately excluded, including links from
 retained groups to those objects. Their independently stored member metal/vias
 and supported connectivity remain captured. These categories can persist in OA;
 the exclusion is a scope decision, not evidence that they are all temporary.
-See [the routing investigation](../virtuoso/ROUTING_SCOPE.md).
+See [the routing investigation](../eda/virtuoso/ROUTING_SCOPE.md).
 
 Descendant hints deduplicate persistent masters, hash saved OA files, and retain
 dirty/time fallback information. PCell submasters are traversed but fingerprinted
@@ -151,7 +151,7 @@ documents attribute omissions and is not a lossless OA fallback.
 
 An independent OA reader may emit these logical records if it implements the
 same type, identity and relationship rules. A general Python OA implementation
-has not been certified. The [KLayout adapter](../klayout_plugin/README.md#snapshot-boundary-and-limitations)
+has not been certified. The [KLayout adapter](../eda/klayout/README.md#snapshot-boundary-and-limitations)
 uses a separate `klayout-static/1` marker and bundles reachable static cells.
 Its evaluated geometry snapshots are rejected by the Virtuoso reconstruction
 adapter; they do not supply native PCell or connectivity semantics.

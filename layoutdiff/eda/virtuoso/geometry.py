@@ -56,7 +56,7 @@ def export(client, lib, cell, destination, stream_map):
     import time
     import uuid
     from virtuoso_bridge.virtuoso.layout import XStreamExportRequest, xstream_export_gds_skill, parse_xstream_log
-    from layoutdiff.virtuoso.adapter import checked
+    from layoutdiff.eda.virtuoso.adapter import checked
     run = "/tmp/ald_gds_" + uuid.uuid4().hex
     response = client.ssh_runner.run_command("mkdir -m 700 " + shlex.quote(run))
     if response.returncode:

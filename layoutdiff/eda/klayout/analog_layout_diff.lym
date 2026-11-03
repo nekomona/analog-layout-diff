@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description>Analog layout diff: capture, commit, history and colored review</description>
+ <version>0.1</version>
+ <category>layout</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>true</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut/>
+ <show-in-menu>false</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text><![CDATA[
+# Import this macro IN PLACE from layoutdiff/eda/klayout/ in KLayout's Macro Development
+# window. If copied elsewhere, set ANALOG_LAYOUT_DIFF_ROOT to the repo directory
+# containing layoutdiff/ before launching KLayout. Installed wheels work too.
+import os
+import sys
+from pathlib import Path
+
+configured = os.environ.get("ANALOG_LAYOUT_DIFF_ROOT")
+if configured:
+    root = Path(configured).expanduser().resolve()
+    if not (root / "layoutdiff" / "eda" / "klayout" / "__init__.py").is_file():
+        raise RuntimeError("Set ANALOG_LAYOUT_DIFF_ROOT to the directory containing layoutdiff/")
+    sys.path.insert(0, str(root))
+else:
+    # A macro imported in place can find a checkout or installed package root.
+    for root in Path(__file__).resolve().parents:
+        if (root / "layoutdiff" / "eda" / "klayout" / "__init__.py").is_file():
+            sys.path.insert(0, str(root))
+            break
+from layoutdiff.eda.klayout.gui import install
+install()
+]]></text>
+</klayout-macro>

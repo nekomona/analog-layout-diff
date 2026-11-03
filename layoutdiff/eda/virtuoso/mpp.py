@@ -3,7 +3,7 @@
 Only data is persisted; replay renders a fixed set of documented ROD keywords.
 Generated figures are reused, not duplicated as flattened geometry.
 """
-from layoutdiff.virtuoso.sexpr import dumps as sk
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk
 import re
 
 PARTS = {'offsetPath': 'offsetSubPath', 'enclosurePath': 'encSubPath', 'rectangle': 'subRect'}

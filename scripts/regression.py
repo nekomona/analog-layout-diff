@@ -11,9 +11,9 @@ from explore import ROOT
 from inventory import LIB
 from virtuoso_bridge import VirtuosoClient
 from layoutdiff.data.core import empty_snapshot, diff, apply_diff, digest
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked, coverage
-from layoutdiff.virtuoso.geometry import export, compare_gds
-from layoutdiff.virtuoso.sexpr import dumps as sk
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked, coverage
+from layoutdiff.eda.virtuoso.geometry import export, compare_gds
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk
 
 
 def drawing(rng, index):

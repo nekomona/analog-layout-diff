@@ -8,8 +8,8 @@ import time
 project = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(project))
 from virtuoso_bridge import VirtuosoClient
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked
-from layoutdiff.virtuoso.sexpr import loads, dumps as sk
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked
+from layoutdiff.eda.virtuoso.sexpr import loads, dumps as sk
 from layoutdiff.data.history import atomic_json
 from layoutdiff.data.core import digest
 p = argparse.ArgumentParser(); p.add_argument('report')

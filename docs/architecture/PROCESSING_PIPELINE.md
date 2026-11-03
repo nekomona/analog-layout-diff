@@ -151,7 +151,7 @@ A held review can receive deferred ROD updates after its initial save. The
 adapter checks the destination identity, settles only that generated cell, then
 validates full readback before opening it read-only. The disposable review may
 persist the effective recipe name; the committed original recipe is retained.
-[MPP findings](../virtuoso/MPP.md) record the observed cache behavior.
+[MPP findings](../eda/virtuoso/MPP.md) record the observed cache behavior.
 
 ## Review, restore and runtime ownership
 
@@ -196,12 +196,12 @@ describes the checks for each component and their limits.
 
 | Responsibility | Source |
 | --- | --- |
-| Native read/typed transport | [virtuoso/skill/reader.il](../../layoutdiff/virtuoso/skill/reader.il), [virtuoso/adapter.py](../../layoutdiff/virtuoso/adapter.py) |
-| Canonical identity and reference semantics | [data/core.py](../../layoutdiff/data/core.py), [virtuoso/logical_groups.py](../../layoutdiff/virtuoso/logical_groups.py), [virtuoso/oa_content.py](../../layoutdiff/virtuoso/oa_content.py) |
-| Coverage and incomplete projection | [virtuoso/support.py](../../layoutdiff/virtuoso/support.py), [virtuoso/omissions.py](../../layoutdiff/virtuoso/omissions.py) |
+| Native read/typed transport | [virtuoso/skill/reader.il](../../layoutdiff/eda/virtuoso/skill/reader.il), [virtuoso/adapter.py](../../layoutdiff/eda/virtuoso/adapter.py) |
+| Canonical identity and reference semantics | [data/core.py](../../layoutdiff/data/core.py), [virtuoso/logical_groups.py](../../layoutdiff/eda/virtuoso/logical_groups.py), [virtuoso/oa_content.py](../../layoutdiff/eda/virtuoso/oa_content.py) |
+| Coverage and incomplete projection | [virtuoso/support.py](../../layoutdiff/eda/virtuoso/support.py), [virtuoso/omissions.py](../../layoutdiff/eda/virtuoso/omissions.py) |
 | V2 codec, exact merge/apply and patch bundles | [data/storage.py](../../layoutdiff/data/storage.py), [data/streaming.py](../../layoutdiff/data/streaming.py), [data/streampatch.py](../../layoutdiff/data/streampatch.py) |
 | Git storage/commit and history | [git/store.py](../../layoutdiff/git/store.py), [git/commit.py](../../layoutdiff/git/commit.py), [ui/browser.py](../../layoutdiff/ui/browser.py) |
 | Presentation, categories and matching | [comparison/changeindex.py](../../layoutdiff/comparison/changeindex.py), [comparison/matching.py](../../layoutdiff/comparison/matching.py), [comparison/review.py](../../layoutdiff/comparison/review.py) |
-| MPP replay and comparison exceptions | [virtuoso/mpp.py](../../layoutdiff/virtuoso/mpp.py), [virtuoso/native_equivalence.py](../../layoutdiff/virtuoso/native_equivalence.py) |
+| MPP replay and comparison exceptions | [virtuoso/mpp.py](../../layoutdiff/eda/virtuoso/mpp.py), [virtuoso/native_equivalence.py](../../layoutdiff/eda/virtuoso/native_equivalence.py) |
 | Review and guarded checkpoint restore | [ui/worker.py](../../layoutdiff/ui/worker.py), [ui/restore.py](../../layoutdiff/ui/restore.py) |
 | Background lifetime and acceleration | [runtime/supervisor.py](../../layoutdiff/runtime/supervisor.py), [data/acceleration.py](../../layoutdiff/data/acceleration.py), [C++ project](../../native-performance/README.md) |

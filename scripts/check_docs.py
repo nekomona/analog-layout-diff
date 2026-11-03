@@ -33,7 +33,7 @@ def anchors(value):
     return found
 
 files=[root/'README.md',root/'CONTRIBUTING.md',root/'.github/pull_request_template.md',
-       root/'klayout_plugin/README.md',root/'native-performance/README.md',
+       root/'layoutdiff/eda/klayout/README.md',root/'native-performance/README.md',
        root/'tests/fixtures/README.md',*sorted(docs.rglob('*.md'))]
 errors=[];checked=0
 for path in files:

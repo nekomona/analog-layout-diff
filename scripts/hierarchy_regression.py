@@ -10,11 +10,11 @@ from inventory import LIB
 from virtuoso_bridge import VirtuosoClient
 from layoutdiff.data.core import diff, digest
 from layoutdiff.data.history import History, atomic_json
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked
-from layoutdiff.virtuoso.dependencies import native_snapshot, dependency_records, DependencyWarning
-from layoutdiff.virtuoso.geometry import export, compare_gds
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked
+from layoutdiff.eda.virtuoso.dependencies import native_snapshot, dependency_records, DependencyWarning
+from layoutdiff.eda.virtuoso.geometry import export, compare_gds
 from layoutdiff.git.tools import git, setup, extract
-from layoutdiff.virtuoso.sexpr import dumps as sk
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk
 
 
 def main():

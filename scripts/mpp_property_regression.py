@@ -10,10 +10,10 @@ import uuid
 from virtuoso_bridge import VirtuosoClient
 from layoutdiff.data.core import canonicalize
 from layoutdiff.data.history import atomic_json
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked
-from layoutdiff.virtuoso.dependencies import native_snapshot
-from layoutdiff.virtuoso.native_equivalence import via_default_projection
-from layoutdiff.virtuoso.sexpr import dumps as sk
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked
+from layoutdiff.eda.virtuoso.dependencies import native_snapshot
+from layoutdiff.eda.virtuoso.native_equivalence import via_default_projection
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk
 
 
 def main():

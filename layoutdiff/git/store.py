@@ -159,7 +159,7 @@ class GitSnapshots:
         return self._metadata[revision]
 
     def omissions(self, revision):
-        from layoutdiff.virtuoso.omissions import AUDIT
+        from layoutdiff.eda.virtuoso.omissions import AUDIT
         raw = blob(self.repo, revision, self.v2 + '/' + AUDIT)
         if raw is None:
             return None

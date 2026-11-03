@@ -16,10 +16,10 @@ from pathlib import Path
 from layoutdiff.data.core import digest
 from layoutdiff.data.history import History, read_json, atomic_json
 from layoutdiff.comparison.review import classify, VISUAL
-from layoutdiff.virtuoso.sexpr import dumps as sk, loads
-from layoutdiff.virtuoso.adapter import VirtuosoAdapter, checked, coverage
-from layoutdiff.virtuoso.support import UnsupportedContentError
-from layoutdiff.virtuoso.paths import scratch
+from layoutdiff.eda.virtuoso.sexpr import dumps as sk, loads
+from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, checked, coverage
+from layoutdiff.eda.virtuoso.support import UnsupportedContentError
+from layoutdiff.eda.virtuoso.paths import scratch
 import layoutdiff.git.commit as gitcommit
 import layoutdiff.git.store as gitstore
 from layoutdiff.ui.browser import HistoryBrowser, RepositoryBrowser, field_text, diff_html
@@ -647,7 +647,7 @@ class GuiWorker:
         state = self.browser_state
         model = state["model"] if state and state["model"] and state["model"].identity == identity else self.history_model(identity)
         before, after = model.pair(commit_id)
-        from layoutdiff.virtuoso.omissions import warning
+        from layoutdiff.eda.virtuoso.omissions import warning
         omission_warning = warning(model.store.omissions(commit_id)) if model.store else ''
         if not after["objects"]:
             self.notice("This revision deletes the layout snapshot. Select an earlier revision to review its layout.")
