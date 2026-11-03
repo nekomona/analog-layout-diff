@@ -34,18 +34,25 @@ procedure(ALDMergeClose(token @optional (closeEditor nil))
       foreach(dw s['docks] hiCloseWindow(dw))
       foreach(field '(navigation decision details)
         when(s[field] hiDeleteForm(s[field])))
-      when(closeEditor && member(s['window] hiGetWindowList()) hiCloseWindow(s['window]))
+      when(closeEditor && member(s['window] hiGetWindowList())
+        let((cv)
+          cv=s['window]->editCellView
+          when(cv && cv~>libName==s['library] && cv~>cellName==s['cell]
+            ; Save only this disposable cell to avoid a close-time modal prompt.
+            when(dbIsCellViewModified(cv) dbSave(cv))
+            hiCloseWindow(s['window]))))
       ALDMergeSessions[token]=nil)))
 
 procedure(ALDMergeOpen(token lib cell generation summary)
   let((s win session form fields rows detail choice status bar dw n action fields2 form2)
-    ALDMergeClose(token t)
     win=deOpenCellView(lib cell "layout" "maskLayout" nil "r")
     unless(win error("Cannot open merge result"))
     session=hiGetSessionWindow(win)
     unless(session error("A Virtuoso session window is required for merge panels"))
+    ALDMergeClose(token t)
     n=win~>windowNum s=makeTable('aldMerge nil)
     s['window]=win s['generation]=generation s['docks]=nil s['highlights]=nil
+    s['library]=lib s['cell]=cell s['visible]=list(t t t) s['blink]=nil s['phase]=t
     ALDMergeSessions[token]=s win->aldMergeToken=token
     ; Prevent ordinary Save & Commit from treating the temporary result as a source.
     ALDGUIAttach(win) ALDGUIWindows[win]['expiredReview]=t
@@ -75,10 +82,16 @@ procedure(ALDMergeOpen(token lib cell generation summary)
       ?title "Decision and result" ?dockSizeHint list(350 500))
     hiDockWindow(?window dw ?session session ?side 'right) s['docks]=cons(dw s['docks])
     bar=hiCreateToolbar(?name concat("aldMergeBar" n) ?title "Layout Merge" ?toolButtonStyle 'textBesideIcon ?items
+      append(list(
+        hiCreateAction(?name 'aldMergePick ?iconText "Pick" ?callback sprintf(nil "ALDMergePick(%L)" token))
+        hiCreateAction(?name 'aldMergeBase ?iconText "Base" ?callback sprintf(nil "ALDMergeToggle(%L 0)" token))
+        hiCreateAction(?name 'aldMergeTarget ?iconText "Target" ?callback sprintf(nil "ALDMergeToggle(%L 1)" token))
+        hiCreateAction(?name 'aldMergeIncoming ?iconText "Incoming" ?callback sprintf(nil "ALDMergeToggle(%L 2)" token))
+        hiCreateAction(?name 'aldMergeBlink ?iconText "Blink" ?callback sprintf(nil "ALDMergeBlink(%L)" token)))
       foreach(mapcar pair '(("Previous" "previous") ("Next" "next") ("Undo decision" "undo")
           ("Redo decision" "redo") ("Validate" "validate") ("Finish merge" "finish") ("Suspend" "suspend"))
         hiCreateAction(?name concat("aldMerge" cadr(pair)) ?iconText car(pair)
-          ?callback sprintf(nil "ALDMergeRequest(%L %L)" token cadr(pair)))))
+          ?callback sprintf(nil "ALDMergeRequest(%L %L)" token cadr(pair))))))
     hiPlaceToolbar(win bar 'top)
     s['toolbar]=bar
     hiZoomIn(win win->displayCellView~>bBox)
@@ -106,10 +119,51 @@ procedure(ALDMergeDraw(token entries)
     foreach(entry entries
       hl=geCreateWindowHilightSet(s['window] car(entry) nil)
       unless(hl error("Cannot create merge highlights"))
-      s['highlights]=cons(hl s['highlights])
+      s['highlights]=append(s['highlights] list(hl))
       foreach(primitive cadr(entry) ALDGUIDrawShadow(hl primitive))
       hl->enable=t)
     hiRedraw(s['window]) t))
+
+procedure(ALDMergeZoom(token box)
+  let((s pad)
+    s=ALDMergeSessions[token]
+    when(s && box
+      pad=max(0.2 (caadr(box)-caar(box))*0.2 (cadadr(box)-cadar(box))*0.2)
+      hiZoomIn(s['window] list(list(caar(box)-pad cadar(box)-pad) list(caadr(box)+pad cadadr(box)+pad))))))
+
+procedure(ALDMergeEdit(token enabled)
+  let((s cv)
+    s=ALDMergeSessions[token] unless(s error("Merge workspace is closed"))
+    cv=s['window]->editCellView
+    unless(cv && cv~>libName==s['library] && cv~>cellName==s['cell]
+      error("Merge editor no longer shows the owned result"))
+    ; geChangeEditMode raises a modal confirmation in Layout XL. Reopen this
+    ; explicitly owned temporary database directly; never change source modes.
+    when(!enabled && dbIsCellViewModified(cv) dbSave(cv))
+    unless(dbReopen(cv if(enabled then "a" else "r")) error("Cannot change merge result mode"))
+    hiRedraw(s['window]) t))
+
+procedure(ALDMergeToggle(token index)
+  let((s)
+    s=ALDMergeSessions[token]
+    when(s
+      setcar(nthcdr(index s['visible]) !nth(index s['visible]))
+      ALDMergeAnimate(token nil))))
+
+procedure(ALDMergeBlink(token)
+  let((s)
+    s=ALDMergeSessions[token]
+    when(s s['blink]=!s['blink] s['phase]=t ALDMergeAnimate(token t))))
+
+procedure(ALDMergeAnimate(token scheduled)
+  let((s n)
+    s=ALDMergeSessions[token]
+    when(s && member(s['window] hiGetWindowList())
+      when(scheduled && s['blink] s['phase]=!s['phase])
+      n=0 foreach(hl s['highlights]
+        hl->enable=nth(n s['visible]) && (!s['blink] || s['phase]) n=n+1)
+      hiRedraw(s['window])
+      when(scheduled && s['blink] hiRegTimer(sprintf(nil "ALDMergeAnimate(%L t)" token) 5)))))
 
 procedure(ALDMergeDetails(token text)
   let((s field form dw)

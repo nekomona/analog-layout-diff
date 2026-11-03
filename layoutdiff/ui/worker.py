@@ -112,6 +112,7 @@ class GuiWorker:
         self.browser_state = None
         self.repository_browser = None
         self.restore_plans = {}
+        self.merge_controller = None
         self.active_work = None
         self.temp_session = None
         self.legacy_cleanup_at = 0
@@ -145,6 +146,7 @@ class GuiWorker:
         checked(self.client.load_il((Path(__file__).parent / "skill" / "workflow.il")))
         checked(self.client.load_il((Path(__file__).parent / "skill" / "gui.il")))
         checked(self.client.load_il((Path(__file__).parent / "skill" / "browser.il")))
+        checked(self.client.load_il((Path(__file__).parents[1] / "eda" / "virtuoso" / "skill" / "merge.il")))
         self.execute("when(ALDGUIOwner ALDGUIStop(ALDGUIOwner))")
         self.execute(f"ALDGUIOwner={sk(self.token)} ALDGUIQueue=nil ALDGUIInstallQuickKey() ALDGUIAttachAll()")
         atomic_json(self.root / "worker.json", {"pid": os.getpid(), "session": self.token,
@@ -723,6 +725,15 @@ class GuiWorker:
 
     def _dispatch(self, request):
         command, *args = request
+        if command.startswith('merge-'):
+            if self.merge_controller is None:
+                from layoutdiff.ui.merge import MergeController
+                self.merge_controller = MergeController(self)
+            if command == 'merge-action' and len(args) == 4:
+                return self.merge_controller.action(*args)
+            if command == 'merge-resume' and len(args) == 1:
+                return self.merge_controller.open(args[0])
+            raise ValueError('Unknown merge request')
         if command in {"backend-info", "backend-config"}:
             from layoutdiff.data.acceleration import info
             if command == "backend-config":
