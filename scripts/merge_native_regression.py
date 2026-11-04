@@ -23,6 +23,7 @@ def main():
     p.add_argument('--layer', required=True)
     p.add_argument('--complex', action='store_true', help='Include pins, ordered groups, MPP and associated text')
     p.add_argument('--repository', action='store_true', help='Also verify an isolated synthetic Git merge')
+    p.add_argument('--active', action='store_true', help='Verify staging into an existing synthetic Git merge instead')
     args = p.parse_args()
     tunnel = SSHClient.from_env(profile=args.profile); tunnel.warm()
     c = VirtuosoClient.from_tunnel(tunnel)
@@ -103,7 +104,7 @@ def main():
         controller.open(token)
         assert controller.opened[token]['session'].snapshot == saved
         controller.action(token, 4, 'suspend')
-        if args.repository:
+        if args.repository or args.active:
             from layoutdiff.git.commit import git
             from layoutdiff.git.store import snapshot_path
             from layoutdiff.git.merge import resolve
@@ -124,7 +125,18 @@ def main():
             git(repo, 'switch', 'target')
             worker.git_repository = lambda: repo
             worker.merge_controller = controller
-            opened = worker.dispatch(['merge-repository', 'start', '', 'incoming'])
+            if args.active:
+                from layoutdiff.data.core import digest
+                assert git(repo, 'merge', '--no-ff', '--no-commit', 'incoming', check=False).returncode == 1
+                (repo / 'unrelated.txt').write_text('staged work')
+                git(repo, 'add', 'unrelated.txt')
+                (repo / 'unrelated.txt').write_text('unstaged work')
+                staged = git(repo, 'ls-files', '--stage', '--', 'unrelated.txt').stdout
+                discovered = controller.setup()['active']
+                opened = worker.dispatch(['merge-repository', 'active', '', digest(discovered)])
+                assert loads(worker.execute('list(ALDMergeRepositoryForm->aldRepocommit->buttonText ALDMergeRepositoryForm->aldRepopublish->enabled)')) == ['Stage layout resolutions', None]
+            else:
+                opened = worker.dispatch(['merge-repository', 'start', '', 'incoming'])
             repo_token = opened['token']; tx = controller.repository(repo_token)
             key, = tx.state['cells']
             opened = worker.dispatch(['merge-repository', 'open-cell', repo_token, key])
@@ -136,10 +148,18 @@ def main():
             worker.dispatch(['merge-action', token, s.generation, 'finish', ''])
             worker.dispatch(['merge-repository', 'commit', repo_token, 'Merge synthetic layouts'])
             assert resolve(repo, 'HEAD') == before
-            worker.dispatch(['merge-repository', 'publish', repo_token, ''])
-            assert git(repo, 'show', '-s', '--format=%P', 'HEAD').stdout.decode().split() == [before, other]
+            if args.active:
+                assert resolve(repo, 'MERGE_HEAD') == other
+                assert not git(repo, 'diff', '--name-only', '--diff-filter=U').stdout
+                assert git(repo, 'ls-files', '--stage', '--', 'unrelated.txt').stdout == staged
+                assert (repo / 'unrelated.txt').read_text() == 'unstaged work'
+                assert controller.repository(repo_token).state['phase'] == 'staged'
+                print('PASS: active merge discovery, native resolution, staging without committing, unrelated work retained', flush=True)
+            else:
+                worker.dispatch(['merge-repository', 'publish', repo_token, ''])
+                assert git(repo, 'show', '-s', '--format=%P', 'HEAD').stdout.decode().split() == [before, other]
+                print('PASS: native validation, nested runtime dispatch, two-parent Git commit and explicit publication', flush=True)
             checked(c.execute_skill('hiFormCancel(ALDMergeRepositoryForm)'))
-            print('PASS: native validation, nested runtime dispatch, two-parent Git commit and explicit publication', flush=True)
         print('PASS: native graphical alternatives, preview/accept, undo/redo, custom edit, validation and resume')
         print('Evidence:', out)
     finally:

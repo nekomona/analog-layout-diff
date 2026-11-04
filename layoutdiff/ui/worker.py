@@ -891,6 +891,14 @@ class GuiWorker:
         if time.monotonic() >= self.legacy_cleanup_at:
             self.clean_reviews()
             self.legacy_cleanup_at = time.monotonic() + 15
+            if self.merge_controller is None:
+                from layoutdiff.ui.merge import MergeController
+                self.merge_controller = MergeController(self)
+            try:
+                self.merge_controller.refresh_hint()
+            except (ValueError, RuntimeError, OSError) as exc:
+                # Discovery must not spam CIW or block queued actions.
+                atomic_json(self.root / 'merge-discovery.json', {'error': str(exc)})
         requests = loads(self.execute(f"ALDGUIPoll({sk(self.token)})")) or []
         for request in requests:
             with self.work_area():

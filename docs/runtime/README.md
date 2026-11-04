@@ -47,8 +47,10 @@ and refuses to overwrite host histories. New GUI commits use Git snapshots.
 
 ## Start and stop
 
-Use **CIW > Layout Diff** or the toolbar **Runtime** button for Start, Stop,
-Restart, status/logs, layout selection, review cleanup and backend configuration.
+Use the lower section of **CIW > Layout Diff**, beneath the separator, for
+**Diagnostics / Background service**, Start, Stop, Restart, worker logs, review
+cleanup and backend configuration. Layout selection and commit/history/merge
+actions are in the upper section and the primary layout toolbar.
 The `gui-serve`, `gui-stop` and `gui-clean` CLI commands request native runtime
 actions. They do not launch a persistent local desktop worker.
 

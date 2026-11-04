@@ -12,7 +12,10 @@ unless(boundp('ALDRuntimeWorkerPid) ALDRuntimeWorkerPid=0)
 unless(boundp('ALDRuntimeBeat) ALDRuntimeBeat="None")
 unless(boundp('ALDRuntimeLastActivity) ALDRuntimeLastActivity="Idle")
 when(boundp('ALDRuntimeForm) && ALDRuntimeForm
-  hiFormCancel(ALDRuntimeForm) hiDeleteForm(ALDRuntimeForm))
+  hiFormCancel(ALDRuntimeForm) hiDeleteForm(ALDRuntimeForm) ALDRuntimeForm=nil)
+
+when(boundp('ALDGUIActionsForm) && ALDGUIActionsForm
+  hiFormCancel(ALDGUIActionsForm) hiDeleteForm(ALDGUIActionsForm) ALDGUIActionsForm=nil)
 
 procedure(ALDRuntimeActivity(text)
   ALDRuntimeLastActivity=text ALDRuntimeUpdate())
@@ -96,8 +99,8 @@ procedure(ALDRuntimeHeartbeat(pid count)
 
 procedure(ALDRuntimeSources(identities)
   ALDRuntimeKnownSources=identities
-  when(boundp('ALDRuntimeForm) && ALDRuntimeForm
-    ALDRuntimeForm->aldSources->choices=foreach(mapcar identity identities
+  when(boundp('ALDGUIActionsForm) && ALDGUIActionsForm
+    ALDGUIActionsForm->aldSources->choices=foreach(mapcar identity identities
       sprintf(nil "%s / %s / %s" car(identity) cadr(identity) caddr(identity)))) t)
 
 procedure(ALDRuntimePickSource(form)
@@ -110,7 +113,7 @@ procedure(ALDRuntimePickSource(form)
 
 procedure(ALDRuntimeRequest(command)
   let((f identity)
-    f=ALDRuntimeForm
+    f=ALDGUIActionsForm
     identity=list(f->aldLib->value f->aldCell->value f->aldView->value)
     if(member("" identity) then ALDGUINotice("Choose a library, cell and layout view first.")
     else
@@ -118,50 +121,58 @@ procedure(ALDRuntimeRequest(command)
         ALDGUIQuickSaveIdentity(identity)
       else ALDGUIEnqueue(append(list(command) identity))))))
 
-procedure(ALDRuntimePanel()
-  let((status lib cell view sources)
-    unless(boundp('ALDRuntimeForm) && ALDRuntimeForm
-      status=hiCreateMLTextField(?name 'aldMonitor ?prompt "" ?editable nil ?enableWordWrap t)
-      lib=hiCreateStringField(?name 'aldLib ?prompt "Library" ?value "LAYOUT_DIFF_TEST")
+procedure(ALDGUIActionsPanel()
+  let((lib cell view sources)
+    unless(boundp('ALDGUIActionsForm) && ALDGUIActionsForm
+      lib=hiCreateStringField(?name 'aldLib ?prompt "Library" ?value "")
       cell=hiCreateStringField(?name 'aldCell ?prompt "Cell" ?value "")
       view=hiCreateStringField(?name 'aldView ?prompt "View" ?value "layout")
       sources=hiCreateListBoxField(?name 'aldSources ?prompt "Recorded layouts" ?choices nil
-        ?multipleSelect nil ?valueByPosition t ?numRows 4
-        ?callback "ALDRuntimePickSource(ALDRuntimeForm)")
-      ALDRuntimeForm=hiCreateAppForm(?name 'ALDRuntimeForm ?formTitle "Layout Diff - Runtime and Layouts"
-        ?fields list(list(status 10:10 760:220)
-          list(hiCreateButton(?name 'aldStart ?buttonText "Start" ?callback "ALDRuntimeStart()") 10:240 100:30)
-          list(hiCreateButton(?name 'aldStop ?buttonText "Stop" ?callback "ALDRuntimeStop()") 120:240 100:30)
-          list(hiCreateButton(?name 'aldRestart ?buttonText "Restart" ?callback "ALDRuntimeRestart()") 230:240 100:30)
-          list(hiCreateButton(?name 'aldRefresh ?buttonText "Refresh layouts" ?callback "ALDGUIEnqueue(list(\"sources\"))") 340:240 140:30)
-          list(hiCreateButton(?name 'aldLogs ?buttonText "Worker log" ?callback "ALDRuntimeLogs()") 490:240 120:30)
-          list(hiCreateButton(?name 'aldClean ?buttonText "Clean reviews" ?callback "ALDGUIEnqueue(list(\"cleanup\"))") 620:240 150:30)
-          list(sources 10:280 760:110 130)
-          list(lib 10:400 760:30 130) list(cell 10:440 760:30 130)
-          list(view 10:480 760:30 130)
-          list(hiCreateButton(?name 'aldCommit ?buttonText "Save && Commit" ?callback "ALDRuntimeRequest(\"commit\")") 10:530 160:30)
-          list(hiCreateButton(?name 'aldHistory ?buttonText "Browse Git history" ?callback "ALDRuntimeRequest(\"history\")") 190:530 180:30)
-          list(hiCreateButton(?name 'aldPerformance ?buttonText "Performance backend..." ?callback "ALDGUIEnqueue(list(\"backend-info\"))") 390:530 220:30))
-        ?initialSize list(800 620) ?buttonLayout 'Close ?dontBlock t ?dialogStyle 'modeless))
+        ?multipleSelect nil ?valueByPosition t ?numRows 5 ?callback "ALDRuntimePickSource(ALDGUIActionsForm)")
+      ALDGUIActionsForm=hiCreateAppForm(?name 'ALDGUIActionsForm ?formTitle "Layout Diff - Layout actions"
+        ?fields list(list(sources 10:10 760:140 130)
+          list(lib 10:160 760:30 130) list(cell 10:200 760:30 130) list(view 10:240 760:30 130)
+          list(hiCreateButton(?name 'aldCommit ?buttonText "Save && Commit" ?callback "ALDRuntimeRequest(\"commit\")") 10:290 230:30)
+          list(hiCreateButton(?name 'aldHistory ?buttonText "History && Changes" ?callback "ALDRuntimeRequest(\"history\")") 260:290 250:30)
+          list(hiCreateButton(?name 'aldMerge ?buttonText "Merge / resolve conflicts" ?callback "ALDGUIEnqueue(list(\"merge-setup\"))") 530:290 240:30)
+          list(hiCreateButton(?name 'aldRefresh ?buttonText "Refresh layouts" ?callback "ALDGUIEnqueue(list(\"sources\"))") 10:335 230:30))
+        ?initialSize list(800 430) ?buttonLayout 'Close ?dontBlock t ?dialogStyle 'modeless))
     ALDRuntimeSources(ALDRuntimeKnownSources)
-    ALDRuntimeUpdate()
-    hiDisplayForm(ALDRuntimeForm)))
+    hiDisplayForm(ALDGUIActionsForm)))
+
+procedure(ALDRuntimePanel()
+  unless(boundp('ALDRuntimeForm) && ALDRuntimeForm
+    ALDRuntimeForm=hiCreateAppForm(?name 'ALDRuntimeForm ?formTitle "Layout Diff - Diagnostics and background service"
+      ?fields list(list(hiCreateMLTextField(?name 'aldMonitor ?prompt "" ?editable nil ?enableWordWrap t) 10:10 760:260)
+        list(hiCreateButton(?name 'aldStart ?buttonText "Start" ?callback "ALDRuntimeStart()") 10:280 100:30)
+        list(hiCreateButton(?name 'aldStop ?buttonText "Stop" ?callback "ALDRuntimeStop()") 120:280 100:30)
+        list(hiCreateButton(?name 'aldRestart ?buttonText "Restart" ?callback "ALDRuntimeRestart()") 230:280 100:30)
+        list(hiCreateButton(?name 'aldLogs ?buttonText "Worker log" ?callback "ALDRuntimeLogs()") 340:280 180:30)
+        list(hiCreateButton(?name 'aldClean ?buttonText "Clean closed reviews" ?callback "ALDGUIEnqueue(list(\"cleanup\"))") 530:280 240:30)
+        list(hiCreateButton(?name 'aldPerformance ?buttonText "Performance backend..." ?callback "ALDGUIEnqueue(list(\"backend-info\"))") 10:325 760:30))
+      ?initialSize list(800 420) ?buttonLayout 'Close ?dontBlock t ?dialogStyle 'modeless))
+  ALDRuntimeUpdate() hiDisplayForm(ALDRuntimeForm))
 
 procedure(ALDRuntimeInstall()
-  unless(boundp('ALDRuntimeMenu)
+  let((n)
+    ; Replace the old menu in place on reload, including pre-separation versions.
+    n=0
+    foreach(menu hiGetBannerMenus(hiGetCIWindow())
+      when(menu=='ALDRuntimeMenu hiDeleteBannerMenu(hiGetCIWindow() n))
+      n=n+1)
     ALDRuntimeMenu=hiCreatePulldownMenu('ALDRuntimeMenu "Layout Diff"
       list(
-        hiCreateMenuItem(?name 'aldPanel ?itemText "Runtime / Commit / History..." ?callback "ALDRuntimePanel()")
-        hiCreateMenuItem(?name 'aldStart ?itemText "Start" ?callback "ALDRuntimeStart()")
-        hiCreateMenuItem(?name 'aldStop ?itemText "Stop" ?callback "ALDRuntimeStop()")
-        hiCreateMenuItem(?name 'aldRestart ?itemText "Restart" ?callback "ALDRuntimeRestart()")))
+        hiCreateMenuItem(?name 'aldCommit ?itemText "Save && Commit / Select layout..." ?callback "ALDGUIActionsPanel()")
+        hiCreateMenuItem(?name 'aldBrowser ?itemText "History && Changes..." ?callback "ALDGUIBrowser()")
+        hiCreateMenuItem(?name 'aldMerge ?itemText "Merge / Resolve active conflicts..." ?callback "ALDGUIEnqueue(list(\"merge-setup\"))")
+        hiCreateSeparatorMenuItem(?name 'aldDiagnosticsSeparator)
+        hiCreateMenuItem(?name 'aldPanel ?itemText "Diagnostics / Background service..." ?callback "ALDRuntimePanel()")
+        hiCreateMenuItem(?name 'aldLogs ?itemText "Worker log..." ?callback "ALDRuntimeLogs()")
+        hiCreateMenuItem(?name 'aldPerformance ?itemText "Performance backend..." ?callback "ALDGUIEnqueue(list(\"backend-info\"))")
+        hiCreateMenuItem(?name 'aldStart ?itemText "Start service" ?callback "ALDRuntimeStart()")
+        hiCreateMenuItem(?name 'aldStop ?itemText "Stop service" ?callback "ALDRuntimeStop()")
+        hiCreateMenuItem(?name 'aldRestart ?itemText "Restart service" ?callback "ALDRuntimeRestart()")))
     hiInsertBannerMenu(hiGetCIWindow() ALDRuntimeMenu hiGetNumMenus(hiGetCIWindow())))
-  unless(ALDRuntimeMenu->aldBrowser
-    hiInsertMenuItem(ALDRuntimeMenu
-      hiCreateMenuItem(?name 'aldBrowser ?itemText "History && Changes..." ?callback "ALDGUIBrowser()") 0))
-  unless(ALDRuntimeMenu->aldMerge
-    hiInsertMenuItem(ALDRuntimeMenu
-      hiCreateMenuItem(?name 'aldMerge ?itemText "Merge branches..." ?callback "ALDGUIEnqueue(list(\"merge-setup\"))") 0))
   unless(boundp('ALDRuntimeExitRegistered)
     regExitAfter('ALDRuntimeExit) ALDRuntimeExitRegistered=t)
   t)

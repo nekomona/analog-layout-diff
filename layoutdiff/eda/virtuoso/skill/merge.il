@@ -123,6 +123,8 @@ procedure(ALDMergeOpen(token lib cell generation summary)
     fields2=list(list(detail 8:8 324:170 0) list(choice 8:186 324:28 85))
     foreach(pair '(("Preview" "preview") ("Accept preview" "accept") ("Edit result" "edit")
         ("Accept edits" "accept-edits") ("Cancel edits" "cancel-edits") ("Serialized preview" "details"))
+      when(cadr(pair)=="details"
+        fields2=append(fields2 list(list(hiCreateSeparatorField(?name 'aldDetailsSeparator)))))
       action=hiCreateButton(?name concat("aldMergeButton" length(fields2)) ?buttonText car(pair)
         ?callback sprintf(nil "ALDMergeRequest(%L %L %s->aldChoice->value)" token cadr(pair) concat("aldMergeDecision" n)))
       fields2=append(fields2 list(list(action list(8 225+36*(length(fields2)-2)) list(324 30)))))

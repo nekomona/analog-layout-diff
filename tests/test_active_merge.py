@@ -218,3 +218,18 @@ def test_interrupted_apply_recovery_restores_original_files(tmp_path,monkeypatch
         resumed.commit_step()
     finally:
         if tx.work.exists():open_repository(tx.path).cancel()
+
+@pytest.mark.parametrize('audit', [b'{}', b'null', b'[]'])
+def test_invalid_staged_audit_cannot_be_silently_discarded(tmp_path, monkeypatch, audit):
+    import json
+    import layoutdiff.git.active_merge as module
+    identity=['TEST','a','layout']
+    data={'snapshot':json.dumps(snap(0)).encode(),'audit':audit,'report':b'synthetic report'}
+    def fake_git(repo,*args,output=None,**kwargs):
+        output.write_bytes(data[args[-1]])
+    monkeypatch.setattr(module,'git',fake_git)
+    entries=(f'100644 snapshot 0\t{snapshot_path(identity)}\0'
+             f'100644 audit 0\t{snapshot_directory(identity)}/omissions.json\0'
+             f'100644 report 0\t{snapshot_directory(identity)}/omissions.jsonl\0').encode()
+    with pytest.raises(ValueError,match='audit'):
+        staged_snapshot(tmp_path,identity,entries,tmp_path/'staged')

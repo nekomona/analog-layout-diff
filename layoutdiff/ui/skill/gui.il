@@ -8,6 +8,7 @@ unless(boundp('ALDGUIHeld) ALDGUIHeld=makeTable('aldGuiHeld nil))
 unless(boundp('ALDGUIReviews) ALDGUIReviews=makeTable('aldGuiReviews nil))
 unless(boundp('ALDGUIStyleData) ALDGUIStyleData=makeTable('aldGuiStyles nil))
 unless(boundp('ALDGUIKnownWindows) ALDGUIKnownWindows=nil)
+unless(boundp('ALDMergeHintText) ALDMergeHintText="Merge")
 unless(boundp('ALDGUIQuickKey) ALDGUIQuickKey=nil)
 unless(boundp('ALDGUIShadowData) ALDGUIShadowData=makeTable('aldShadows nil))
 unless(boundp('ALDGUIBlinkGeneration) ALDGUIBlinkGeneration=0)
@@ -249,7 +250,7 @@ procedure(ALDGUIQuickSaveIdentity(identity)
 procedure(ALDGUIHistory(win)
   let((identity)
     if(ALDGUIWindows[win] && ALDGUIWindows[win]['expiredReview] then
-      ALDGUINotice("This review predates the current runtime. Browse the source history from the Runtime panel to reopen it.")
+      ALDGUINotice("This review predates the current runtime. Browse the source history from History & Changes to reopen it.")
     else
       identity=ALDGUIIdentity(win)
       when(identity ALDGUIEnqueue(append(list("history") identity))))))
@@ -454,8 +455,7 @@ procedure(ALDGUIAttach(win)
             ?toolTip strcat("Save layout and preview a Git commit. Shortcut: " or(ALDGUIQuickKey "none available"))
             ?callback sprintf(nil "ALDGUIQuickSave(window(%d))" n))
           hiCreateAction(?name 'aldHistory ?iconText "History" ?callback sprintf(nil "ALDGUIHistory(window(%d))" n))
-          hiCreateAction(?name 'aldMerge ?iconText "Merge" ?callback "ALDGUIEnqueue(list(\"merge-setup\"))")
-          hiCreateAction(?name 'aldRuntime ?iconText "Runtime" ?callback "ALDRuntimePanel()")
+          hiCreateAction(?name 'aldMerge ?iconText ALDMergeHintText ?callback "ALDGUIEnqueue(list(\"merge-setup\"))")
           hiCreateAction(?name 'aldStatus ?iconText "Ready" ?enabled nil ?callback "t")))
       state=makeTable('aldWindowState nil) state['toolbar]=bar state['commitToolbar]=bar
       when(strlen(cv~>cellName)==27 && substring(cv~>cellName 1 11)=="ALD_REVIEW_"
@@ -625,3 +625,11 @@ procedure(ALDGUIOpenUnsupported()
       ALDGUIResultForm->aldReportWindow=ALDGUIViewFile(ALDGUIResultForm->aldReportPath
         "Layout Diff - Unsupported Elements")
       ALDGUIActiveLease=previous)))
+
+procedure(ALDMergeHint(text)
+  ALDMergeHintText=text
+  when(boundp('ALDGUIHistoryForm) && ALDGUIHistoryForm && ALDGUIHistoryForm->aldMerge
+    ALDGUIHistoryForm->aldMerge->buttonText=text)
+  foreach(win hiGetWindowList()
+    when(ALDGUIWindows[win] && ALDGUIWindows[win]['commitToolbar]
+      ALDGUIWindows[win]['commitToolbar]->aldMerge->iconText=text)) t)

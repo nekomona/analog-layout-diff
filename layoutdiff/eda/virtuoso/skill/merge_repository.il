@@ -1,4 +1,8 @@
 ; Repository setup and progress. Geometry decisions stay in the native editor.
+; Rebuild form fields on upgrade; durable decisions belong to the worker journal.
+when(boundp('ALDMergeRepositoryForm) && ALDMergeRepositoryForm
+  hiFormCancel(ALDMergeRepositoryForm) hiDeleteForm(ALDMergeRepositoryForm) ALDMergeRepositoryForm=nil)
+
 procedure(ALDMergeRepoRequest(action @optional (value ""))
   when(boundp('ALDMergeRepositoryForm) && ALDMergeRepositoryForm
     ALDMergeRepositoryForm->aldSummary->value=strcat("Loading: " action)
@@ -7,30 +11,37 @@ procedure(ALDMergeRepoRequest(action @optional (value ""))
 procedure(ALDMergeRow(field)
   when(field->value car(nth(car(field->value) field->choices))))
 
-procedure(ALDMergeSetup(repo branch refs sessions)
-  let((fields info incoming rows start resume form)
+procedure(ALDMergeSetup(repo branch refs sessions @optional (activeText "") (activeStamp "") activeEnabled)
+  let((fields info incoming rows start resume form active)
     when(boundp('ALDMergeSetupForm) && ALDMergeSetupForm
       hiFormCancel(ALDMergeSetupForm) hiDeleteForm(ALDMergeSetupForm))
-    info=hiCreateMLTextField(?name 'aldInfo ?prompt "" ?editable nil ?value
-      strcat("Repository: " repo "\nTarget: " branch "\nBranches: " sprintf(nil "%L" refs)
-        "\nEnter incoming branches in integration order, separated by spaces. Each step creates a two-parent commit."))
+    info=hiCreateMLTextField(?name 'aldInfo ?prompt "" ?editable nil ?hasHorizontalScrollbar nil ?enableWordWrap t ?value
+      strcat("Repository: " repo "\nTarget: " branch "\n"
+        if(activeStamp!="" then activeText else strcat("Branches: " sprintf(nil "%L" refs)
+          "\nEnter incoming branches in integration order, separated by spaces. Each step creates a two-parent commit."))))
     incoming=hiCreateStringField(?name 'aldIncoming ?prompt "Incoming branches" ?value "")
+    incoming->enabled=activeStamp==""
     rows=hiCreateReportField(?name 'aldSessions ?title "SUSPENDED MERGES" ?selectMode 'single
       ?headers '(("Session" 245 left string nil) ("Phase" 100 left string nil) ("Target" 220 left string nil)) ?choices sessions)
     start=hiCreateButton(?name 'aldStart ?buttonText "Start merge" ?callback
       "ALDMergeSetupForm->aldInfo->value=\"Loading: preparing isolated Git merge...\" ALDGUIEnqueue(list(\"merge-repository\" \"start\" \"\" ALDMergeSetupForm->aldIncoming->value))")
+    start->enabled=activeStamp==""
+    active=hiCreateButton(?name 'aldActive ?buttonText "Resolve active Git merge" ?enabled activeEnabled ?callback
+      sprintf(nil "ALDMergeSetupForm->aldInfo->value=\"Loading: reading active Git merge...\" ALDGUIEnqueue(list(\"merge-repository\" \"active\" \"\" %L))" activeStamp))
     resume=hiCreateButton(?name 'aldResume ?buttonText "Resume selected" ?callback
       "when(ALDMergeRow(ALDMergeSetupForm->aldSessions) ALDGUIEnqueue(list(\"merge-repository\" \"resume\" ALDMergeRow(ALDMergeSetupForm->aldSessions) \"\")))")
     form=hiCreateAppForm(?name 'ALDMergeSetupForm ?formTitle "Layout Diff - Merge branches"
-      ?fields list(list(info 10:10 700:120 0) list(incoming 10:140 700:28 150)
-        list(rows 10:180 700:210 0) list(start 10:405 330:32) list(resume 360:405 350:32))
-      ?buttonLayout 'Close ?dontBlock t ?dialogStyle 'modeless ?initialSize list(730 500))
+      ?fields list(list(info 10:10 700:190 0) list(active 10:210 700:32)
+        list(hiCreateSeparatorField(?name 'aldSeparator) 10:252 700:0)
+        list(incoming 10:265 700:28 150) list(rows 10:305 700:180 0)
+        list(start 10:495 330:32) list(resume 360:495 350:32))
+      ?buttonLayout 'Close ?dontBlock t ?dialogStyle 'modeless ?initialSize list(730 590))
     hiDisplayForm(form)))
 
-procedure(ALDMergeRepository(token text cells files @optional stamp)
+procedure(ALDMergeRepository(token text cells files @optional stamp active (phase "resolving"))
   let((summary rows conflicts choice message fields button form n)
     unless(boundp('ALDMergeRepositoryForm) && ALDMergeRepositoryForm
-      summary=hiCreateMLTextField(?name 'aldSummary ?prompt "" ?editable nil)
+      summary=hiCreateMLTextField(?name 'aldSummary ?prompt "" ?editable nil ?hasHorizontalScrollbar nil ?enableWordWrap t)
       rows=hiCreateReportField(?name 'aldCells ?title "AFFECTED CELLS" ?selectMode 'single
         ?headers '(("ID" 0 left string nil) ("Cellview" 470 left string nil) ("State" 140 left string nil)) ?choices nil)
       conflicts=hiCreateReportField(?name 'aldFiles ?title "ORDINARY FILE CONFLICTS" ?selectMode 'single
@@ -65,6 +76,16 @@ procedure(ALDMergeRepository(token text cells files @optional stamp)
       form=hiCreateAppForm(?name 'ALDMergeRepositoryForm ?formTitle "Layout Diff - Merge repository"
         ?fields fields ?buttonLayout 'Close ?dontBlock t ?dialogStyle 'modeless ?initialSize list(790 800)))
     ALDMergeRepositoryForm->aldStamp=stamp
+    ALDMergeRepositoryForm->aldActive=active
+    ALDMergeRepositoryForm->aldRepocommit->buttonText=if(active then "Stage layout resolutions" else "Commit step")
+    ALDMergeRepositoryForm->aldRepocommit->enabled=phase=="resolving"
+    ALDMergeRepositoryForm->aldOpenCell->enabled=phase=="resolving"
+    ALDMergeRepositoryForm->aldRepopublish->enabled=!active && phase=="ready"
+    ALDMergeRepositoryForm->aldChooseFile->enabled=!active && phase=="resolving"
+    ALDMergeRepositoryForm->aldFileSide->enabled=!active
+    ALDMergeRepositoryForm->aldMessage->enabled=!active
+    ALDMergeRepositoryForm->aldDiscard->enabled=!member(phase '("published" "staged" "cancelled"))
+    ALDMergeRepositoryForm->aldDiscard->buttonText=if(active then "Discard editor session..." else "Discard this merge...")
     ALDMergeRepositoryForm->aldToken=token ALDMergeRepositoryForm->aldSummary->value=text
     ALDMergeRepositoryForm->aldCells->choices=cells ALDMergeRepositoryForm->aldFiles->choices=files
     hiDisplayForm(ALDMergeRepositoryForm)))
@@ -74,7 +95,7 @@ procedure(ALDMergeDiscard(token)
     when(boundp('ALDMergeDiscardForm) && ALDMergeDiscardForm
       hiFormCancel(ALDMergeDiscardForm) hiDeleteForm(ALDMergeDiscardForm))
     body=hiCreateMLTextField(?name 'aldText ?prompt "" ?editable nil
-      ?value "Discard the unpublished preparation worktree and close its temporary merge views? Accepted decision journals remain for inspection. The source branch and OA layouts are unchanged. Close this dialog to keep the merge suspended.")
+      ?value "Discard this editor's preparation worktree and close its temporary views? Accepted decision journals remain for inspection. This does not abort an active Git merge or discard already staged files. The source branch and OA layouts are unchanged. Close this dialog to keep the editor session suspended.")
     yes=hiCreateButton(?name 'aldYes ?buttonText "Discard merge" ?callback sprintf(nil
       "hiFormCancel(ALDMergeDiscardForm) ALDGUIEnqueue(list(\"merge-repository\" \"cancel\" %L \"\"))" token))
     no=hiCreateButton(?name 'aldNo ?buttonText "Keep suspended" ?callback "hiFormCancel(ALDMergeDiscardForm)")
@@ -83,12 +104,12 @@ procedure(ALDMergeDiscard(token)
       ?buttonLayout 'Empty ?dontBlock t ?dialogStyle 'modeless ?initialSize list(630 220))
     hiDisplayForm(form)))
 
-procedure(ALDMergeRepositoryOmissions(token phase text)
+procedure(ALDMergeRepositoryOmissions(token phase text @optional active)
   let((body yes no form)
     when(boundp('ALDMergeRepoConsent) && ALDMergeRepoConsent
       hiFormCancel(ALDMergeRepoConsent) hiDeleteForm(ALDMergeRepoConsent))
     body=hiCreateMLTextField(?name 'aldWarning ?prompt "" ?editable nil ?value text)
-    yes=hiCreateButton(?name 'aldYes ?buttonText if(phase==1 then "Continue" else "Confirm loss and commit")
+    yes=hiCreateButton(?name 'aldYes ?buttonText if(phase==1 then "Continue" else if(active then "Confirm loss and stage" else "Confirm loss and commit"))
       ?callback sprintf(nil "hiFormCancel(ALDMergeRepoConsent) ALDGUIEnqueue(list(\"merge-repository\" %L %L \"\"))"
         if(phase==1 then "omit-continue" else "omit-confirm") token))
     no=hiCreateButton(?name 'aldNo ?buttonText "Reject" ?callback sprintf(nil

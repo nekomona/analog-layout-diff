@@ -112,9 +112,11 @@ def staged_snapshot(repo, identity, entries, folder):
     else:
         result = empty_snapshot()
     audit = strict_json((folder / 'omissions.json').read_bytes()) if (folder / 'omissions.json').exists() else None
-    if audit and (audit.get('snapshotSha256') != digest(result) or audit.get('schema') != 'analog-layout-diff/omissions/1' or
+    if audit is not None and (not isinstance(audit, dict) or audit.get('snapshotSha256') != digest(result) or audit.get('schema') != 'analog-layout-diff/omissions/1' or
                   any(type(audit.get(k)) is not int or audit[k] < 0 for k in ('omitted', 'detached'))):
         raise ValueError('Staged omission audit does not match its snapshot')
+    if audit is None and (folder / 'omissions.jsonl').exists():
+        raise ValueError('Staged omission report has no valid audit')
     return result, audit
 
 

@@ -7,7 +7,11 @@ Use the [CLI guide](CLI.md) for command dependencies and preservation limits.
 
 ## Save and commit
 
-The layout toolbar provides **Save & Commit**, **History**, **Merge** and **Runtime**.
+The layout toolbar provides **Save & Commit**, **History** and **Merge**.
+The CIW Layout Diff menu puts these actions above a separator; diagnostics, worker
+logs, performance settings and service controls are below it. **Select layout**
+opens the cell selector. The history browser keeps diagnostics below its status
+area, and the merge decision dock separates optional serialized details.
 Save & Commit saves the edited cellview, previews repository/branch/identity,
 change counts and semantic details, then focuses the commit-message field.
 **Enter** or **OK** commits; **Cancel** leaves the native layout saved.
@@ -86,11 +90,20 @@ The selected Git checkpoint remains unchanged. See the
 
 ## Interactive merge editor
 
-Open **Merge** on the layout toolbar or **CIW > Layout Diff > Merge branches...**.
+Open **Merge** on the layout toolbar or **CIW > Layout Diff > Merge / Resolve active conflicts...**.
 The target is the selected repository's current branch. Enter incoming branches
 in integration order, or resume an existing session. The repository panel lists
 affected cells and ordinary-file conflicts, with 100-row pages. Open a cell to
 work in its temporary native layout editor.
+
+If Git already has an active merge, setup shows **ACTIVE GIT MERGE** and the
+number of affected/conflicting layouts. **Resolve active Git merge** reads the
+immutable parents; already staged layout resolutions are retained. The toolbar
+also notices an active merge during the background refresh (about 15 seconds).
+After native validation, **Stage layout resolutions** updates only those layout
+bundles. It does not commit or publish. Resolve other file conflicts and review
+all staged files in your Git tool before completing the merge. **Discard editor
+session** leaves the original Git merge running.
 
 The left dock lists decisions with a category filter and 50-row pages. Categories
 retain the movement/stretch and modified-net distinctions. **Pick** finds decisions

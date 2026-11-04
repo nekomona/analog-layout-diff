@@ -46,3 +46,22 @@ substantial timing overhead. These timings exclude native capture/reconstruction
 Git processes and EDA licenses. Retain machine-specific measurements under ignored
 evidence storage. Native alternatives use dependency closures; the complete
 three-way analysis and Result are still held in Python memory.
+
+
+## Active Git merges and menu upgrades
+
+`tests/test_active_merge.py` exercises immutable parent reads, preserved staged
+resolutions, layout-only staging with ordinary conflicts, v1/v2 input, additions,
+deletions, omission consent, stale state, cancellation, and interrupted staging.
+`tests/test_gitcommit.py` checks v1/v2 preservation of unrelated staged and unstaged
+work and snapshots across ordinary commits. Native regression commands are:
+
+```sh
+python scripts/ui_menu_native_smoke.py --profile PROFILE
+python scripts/merge_native_regression.py --profile PROFILE --technology TECH --layer LAYER --active
+```
+
+The menu smoke upgrades the connected plugin's controls, checks repeated installation
+and separate forms, then closes the test forms. The active regression uses synthetic
+repositories and native helper cells; it verifies graphical validation and stage-only
+completion. Neither test edits a source design layout.

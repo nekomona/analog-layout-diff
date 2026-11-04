@@ -28,6 +28,8 @@ class MergeController:
         self.repositories.mkdir(exist_ok=True)
         self.pending_commit = None
         self.repository_pages = {}
+        self.active_discovery = None
+        self.hint = None
 
     def start(self, base, target, incoming, *, metadata=None):
         token = uuid.uuid4().hex
@@ -259,11 +261,12 @@ class MergeController:
         state = self.opened[token]
         session = state['session']
         if session.metadata.get('repository'):
-            from layoutdiff.git.merge import RepositoryMerge
-            tx = RepositoryMerge(session.metadata['repository'])
+            from layoutdiff.git.merge import open_repository
+            tx = open_repository(session.metadata['repository'])
             tx.validate_cell(session.metadata['cell_key'], digest(session.snapshot))
             self.repository_panel(tx.path.name)
-            self.worker.notice('Cell validated for this merge. Complete the other cells, then Commit step in the Merge repository panel.')
+            action = 'Stage layout resolutions' if tx.state.get('mode') == 'active' else 'Commit step'
+            self.worker.notice('Cell validated for this merge. Complete the other cells, then ' + action + ' in the Merge repository panel.')
             return {'validated': digest(session.snapshot), 'repository': str(tx.path)}
         atomic_json(session.path / 'validated-result.json', session.snapshot)
         self.worker.notice('Merge result validated and saved. This session has no Git transaction attached.')
@@ -271,56 +274,100 @@ class MergeController:
 
     def setup(self):
         from layoutdiff.git.commit import git, revision
+        from layoutdiff.git.active_merge import active_merge
         repo = self.worker.git_repository()
         if repo is None:
             raise ValueError('Select a Git repository with Save & Commit before starting a merge')
-        branch = revision(repo)['branch'].removeprefix('refs/heads/')
+        active = active_merge(repo)
+        branch = (active['branch'] or '(detached HEAD)' if active else revision(repo)['branch']).removeprefix('refs/heads/')
+        self.active_discovery = {'repo': str(repo), 'stamp': digest(active)} if active else None
+        hint = self.active_text(active)
         refs = git(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes').stdout.decode().splitlines()
         rows = []
         for p in sorted(self.repositories.glob('*/repository.json')):
             from layoutdiff.data.history import read_json
             s = read_json(p)
-            if s['phase'] not in {'published', 'cancelled'}:
+            if s['phase'] not in {'published', 'cancelled', 'staged'}:
                 rows.append([p.parent.name, s['phase'], s['original']['branch']])
-        self.worker.execute(f'ALDMergeSetup({sk(str(repo))} {sk(branch)} {sk(refs[:100])} {sk(rows[-100:])})')
-        return {'repository': str(repo), 'sessions': len(rows)}
+        self.worker.execute(f'ALDMergeSetup({sk(str(repo))} {sk(branch)} {sk(refs[:100])} {sk(rows[-100:])} '
+                            f'{sk(field_text(hint))} {sk(digest(active) if active else "")} '
+                            f'{sk(bool(active and active["cells"] and not active["reason"]))})')
+        return {'repository': str(repo), 'sessions': len(rows), 'active': active}
+
+    @staticmethod
+    def active_text(active):
+        if not active:
+            return ''
+        return (f'ACTIVE GIT MERGE: {len(active["conflicted"])} layout cells conflict; '
+                f'{len(active["cells"])} layout cells changed/staged.\n' +
+                (active['reason'] or ('Resolve active merge to review layouts graphically and stage their resolutions. '
+                 'Finish the merge in your Git tool; other staged files and ordinary conflicts are preserved.'
+                 if active['cells'] else 'No managed layouts need resolution. Continue in your Git tool.')))
+
+    def refresh_hint(self):
+        from layoutdiff.git.active_merge import active_merge
+        info = active_merge(self.worker.git_repository())
+        hint = ('Merge: active (' + str(len(info['conflicted'])) + ')' if info else 'Merge')
+        if hint != self.hint:
+            self.worker.execute(f'ALDMergeHint({sk(hint)})')
+            self.hint = hint
 
     def repository(self, token):
-        from layoutdiff.git.merge import RepositoryMerge
+        from layoutdiff.git.merge import open_repository
         if not re.fullmatch('[0-9a-f]{32}', token):
             raise ValueError('Invalid repository merge ID')
-        return RepositoryMerge(self.repositories / token)
+        return open_repository(self.repositories / token)
 
     def repository_panel(self, token):
         tx = self.repository(token)
         s = tx.state
+        active = s.get('mode') == 'active'
         cells = [[k, ' / '.join(c['identity']), 'validated' if c['validated'] else 'needs review']
                  for k, c in s['cells'].items()]
         files = [[p, choice or 'unresolved'] for p, choice in s['files'].items()]
+        if active:
+            from layoutdiff.git.active_merge import active_merge
+            current = active_merge(tx.repo)
+            conflicts = set(current['conflicts']) if current else set()
+            files = [[p, 'resolve in Git' if p in conflicts else 'resolved externally'] for p in s['files']]
         pages = self.repository_pages.setdefault(token, {'cells': 0, 'files': 0})
         text = (f'Target: {s["original"]["branch"]}\nPhase: {s["phase"]}; step {min(s["step"]+1,len(s["incoming"]))}/{len(s["incoming"])}\n'
                 + 'Incoming order: ' + ' -> '.join(v['label'] for v in s['incoming']) +
                 f'\n{len(s.get("paths", []))} affected repository paths; {len(cells)} layout cells; {len(files)} ordinary-file conflicts.\n'
                 'Commit step creates an isolated two-parent commit. Publish fast-forwards the original clean checkout. OA layouts are unchanged.')
+        if active:
+            text = (f'ACTIVE GIT MERGE: {s["original"]["branch"] or "detached HEAD"}\nPhase: {s["phase"]}; '
+                    f'{len(cells)} layout cells; {len(files)} ordinary-file conflicts at discovery.\n'
+                    'Stage layout resolutions updates only the managed layout bundles. It does not create a commit.\n'
+                    'Review all staged files and finish the merge with your Git tool. Ordinary-file conflicts are resolved there. OA layouts are unchanged.')
         # Complete affected paths remain available on disk; only bounded rows
         # enter the native forms. Paging is handled by repository navigation.
         text += f'\nCell page {pages["cells"]+1}; file page {pages["files"]+1}. 100 rows per page.'
         self.worker.execute(f'ALDMergeRepository({sk(token)} {sk(field_text(text))} '
                             f'{sk(cells[pages["cells"]*100:(pages["cells"]+1)*100])} '
-                            f'{sk(files[pages["files"]*100:(pages["files"]+1)*100])} {sk(digest(s))})')
+                            f'{sk(files[pages["files"]*100:(pages["files"]+1)*100])} {sk(digest(s))} {sk(active)} {sk(s["phase"])})')
         return {'token': token, 'phase': s['phase'], 'cells': len(cells), 'files': len(files)}
 
     def repository_action(self, action, token='', value='', stamp=None):
         from layoutdiff.git.merge import RepositoryMerge
-        if stamp is not None and action not in {'start', 'resume', 'refresh'} and digest(self.repository(token).state) != stamp:
+        if stamp is not None and action not in {'start', 'active', 'resume', 'refresh'} and digest(self.repository(token).state) != stamp:
             raise ValueError('Stale repository request; refresh the merge panel')
         if action == 'start':
             incoming = value.replace(',', ' ').split()
             token = uuid.uuid4().hex
             RepositoryMerge.create(self.repositories / token, self.worker.git_repository(), incoming)
+        elif action == 'active':
+            from layoutdiff.git.active_merge import ActiveMerge
+            discovery = self.active_discovery
+            if not discovery or value != discovery['stamp'] or str(self.worker.git_repository()) != discovery['repo']:
+                raise ValueError('Refresh Merge before opening the active conflict')
+            token = uuid.uuid4().hex
+            ActiveMerge.create(self.repositories / token, discovery['repo'], expected=value)
         elif action == 'resume':
             tx = self.repository(token)
-            if tx.state['phase'] == 'committing':
+            if tx.state['phase'] == 'applying':
+                tx.recover_apply(getattr(self.worker, 'lock_registry', None))
+            elif tx.state['phase'] == 'committing':
                 tx.recover_commit()
             elif tx.state['phase'] == 'publishing':
                 tx.recover_publish()
@@ -388,8 +435,9 @@ class MergeController:
                 if value not in tx.state['files']:
                     raise ValueError('Select an ordinary-file conflict')
                 text = ''
-                for label, rev in [('Target', tx.state['head']), ('Incoming', tx.state['incoming'][tx.state['step']]['sha'])]:
-                    raw = git(tx.work, 'diff', '--no-ext-diff', '--no-textconv', tx.state['base'], rev, '--', value).stdout
+                step = min(tx.state['step'], len(tx.state['incoming']) - 1)
+                for label, rev in [('Target', tx.state['head']), ('Incoming', tx.state['incoming'][step]['sha'])]:
+                    raw = git(tx.repo, 'diff', '--no-ext-diff', '--no-textconv', tx.state['base'], rev, '--', value).stdout
                     text += label + '\n' + raw.decode('utf-8', errors='replace') + '\n'
             with self.worker.work_area() as area:
                 path = area['path'] / 'merge-paths.txt'; path.write_text(text, encoding='utf-8')
@@ -405,10 +453,12 @@ class MergeController:
         return digest([tx.state, {k: tx.cell(k).head for k in tx.state['cells']}])
 
     def repository_omission_prompt(self, token, phase):
+        active = self.repository(token).state.get('mode') == 'active'
         text = ('This merge includes incomplete snapshots. Their omission diagnostics will be preserved.\n'
                 'Restoring the merged checkpoint WILL LOSE the omitted elements.\n'
-                + ('Continue to the second confirmation?' if phase == 1 else 'Confirm this loss to create the merge commit.'))
-        self.worker.execute(f'ALDMergeRepositoryOmissions({sk(token)} {phase} {sk(text)})')
+                + ('Continue to the second confirmation?' if phase == 1 else
+                   'Confirm this loss to stage the layout resolutions.' if active else 'Confirm this loss to create the merge commit.'))
+        self.worker.execute(f'ALDMergeRepositoryOmissions({sk(token)} {phase} {sk(text)} {sk(active)})')
 
     def close_repository_views(self, tx):
         for token, state in list(self.opened.items()):
@@ -422,6 +472,8 @@ class MergeController:
         for state in self.opened.values():
             if state['session'].metadata.get('repository') == str(tx.path) and (state['view'].editing or state['preview']):
                 raise ValueError('Accept or cancel every native edit and preview before committing')
+        if tx.state.get('mode') == 'active':
+            kwargs['registry'] = getattr(self.worker, 'lock_registry', None)
         tx.commit_step(message, **kwargs)
         self.repository_pages[tx.path.name] = {'cells': 0, 'files': 0}
         self.close_repository_views(tx)

@@ -138,7 +138,7 @@ class HistoryBrowser:
                    f"Layout: {' / '.join(self.identity)}\n"
                    f"{'Git ' + meta['sha'] if meta else 'Local revision ' + commit_id}\n"
                    f"{meta.get('author', 'Author/date not recorded')}  {meta.get('date', '')}\n"
-                   + (f"Processing backend: {categories.backend}\n" if self.store else "Legacy local archive (read only)\n") +
+                   + ("" if self.store else "Legacy local archive (read only)\n") +
                    f"Layout changes: +{stat['added']} added   ~{stat['modified']} modified   -{stat['deleted']} deleted"
                    f"   {stat['modified_net']} modified net"
                    f"   {stat['moved']} moved / stretched"

@@ -159,3 +159,34 @@ def test_repository_flow_routes_native_validation_before_git_commit(monkeypatch,
     assert not c.opened
     c.repository_action('publish', token)
     assert resolve(repo, 'HEAD') != target
+
+
+def test_active_merge_discovery_and_graphical_stage(monkeypatch, tmp_path):
+    from test_active_merge import conflicted
+    from layoutdiff.data.core import digest
+    from layoutdiff.git.merge import resolve
+    repo, target, incoming = conflicted(tmp_path)
+    monkeypatch.setattr('layoutdiff.ui.merge.MergeView', View)
+    worker = Worker(tmp_path); worker.git_repository = lambda: repo
+    c = MergeController(worker)
+    info = c.setup()['active']
+    assert 'ACTIVE GIT MERGE' in worker.calls[-1]
+    c.refresh_hint()
+    assert 'Merge: active (1)' in worker.calls[-1]
+    token = c.repository_action('active', value=digest(info))['token']
+    try:
+        tx = c.repository(token)
+        for key in tx.state['cells']:
+            native = c.repository_action('open-cell', token, key)['token']
+            session = c.opened[native]['session']
+            for ident in session.unresolved():
+                c.action(native, session.generation, 'select', ident)
+                c.action(native, session.generation, 'preview', 'incoming')
+                c.action(native, session.generation, 'accept')
+            c.action(native, session.generation, 'finish')
+        result = c.repository_action('commit', token)
+        assert result['phase'] == 'staged' and not c.opened
+        assert resolve(repo, 'HEAD') == target and resolve(repo, 'MERGE_HEAD') == incoming
+    finally:
+        tx = c.repository(token)
+        if tx.work.exists(): c.repository_action('cancel', token)

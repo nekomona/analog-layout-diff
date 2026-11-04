@@ -17,10 +17,11 @@ file-only comparison and replay run independently of Cadence.
 | Capture and version | Canonical layout records stored as deterministic, reviewable JSONL in Git |
 | Compare and review | Geometry, connectivity and property changes, conservative movement matching, category counts and native highlights |
 | Reconstruct and verify | Fresh-cell reconstruction with native readback and hierarchy-drift warnings |
-| Merge branches | Native graphical three-way decisions, editable result, durable undo and isolated two-parent Git commits |
+| Merge branches | Native graphical three-way decisions, editable result, durable undo, isolated two-parent commits and resolution staging for active Git merges |
 | Work from files | Exact diff/apply, integrity-checked replay and the KLayout GDS/OASIS adapter |
 
-The Virtuoso toolbar provides **Save & Commit**, **History**, **Merge** and **Runtime**.
+The Virtuoso toolbar provides **Save & Commit**, **History** and **Merge**.
+Diagnostics and background-service controls are below a separator in the CIW menu.
 Save & Commit saves the edited view, previews changes and commits after
 confirmation. Review opens a temporary read-only reconstruction. See the
 [UI guide](docs/ui/README.md) for review styles and checkpoint restore.
