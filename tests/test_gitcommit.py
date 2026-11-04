@@ -27,7 +27,8 @@ def test_initial_preview_cancel_is_read_only(repo):
     assert not (repo / ".git/index").exists()
 
 
-def test_git_snapshots_preserve_unrelated_index_and_worktree(repo):
+@pytest.mark.parametrize("v2", [False, True])
+def test_git_snapshots_preserve_unrelated_index_and_worktree(repo, tmp_path, v2):
     (repo / "other.txt").write_text("base")
     gc.git(repo, "add", "other.txt")
     gc.git(repo, "commit", "-m", "unrelated baseline")
@@ -36,8 +37,14 @@ def test_git_snapshots_preserve_unrelated_index_and_worktree(repo):
     (repo / "other.txt").write_text("unstaged edit")
     staged = gc.git(repo, "ls-files", "--stage", "--", "other.txt").stdout
     for value in (1, 2):
-        preview = gc.prepare(repo, IDENTITY, snapshot(value))
+        source = snapshot(value)
+        if v2:
+            from layoutdiff.data.storage import from_snapshot
+            source = from_snapshot(source, tmp_path / ('snapshot-' + str(value)))
+        preview = gc.prepare(repo, IDENTITY, source)
         result = gc.commit(preview, "message with unicode \u6d4b\u8bd5 and $() `quotes`\n\nbody")
+        if v2:
+            source.close()
         assert result["git_commit"] == gc.revision(repo)["head"]
         assert gc.git(repo, "ls-files", "--stage", "--", "other.txt").stdout == staged
         assert (repo / "other.txt").read_text() == "unstaged edit"
@@ -153,3 +160,21 @@ def test_large_preview_respects_native_field_limit_without_losing_patch(repo):
     assert len(preview["display_patch"].encode("utf-8")) < 8191
     assert "View full diff" in preview["display_patch"]
     assert len(preview["patch"]) > len(preview["display_patch"])
+
+
+def test_ordinary_commits_retain_layout_and_next_diff_base(repo):
+    first = gc.commit(gc.prepare(repo, IDENTITY, snapshot(1)), "layout one")["git_commit"]
+    (repo / "notes.txt").write_text("ordinary change")
+    gc.git(repo, "add", "notes.txt"); gc.git(repo, "commit", "-m", "documentation only")
+    ordinary = gc.revision(repo)["head"]
+    store = GitSnapshots(repo, IDENTITY)
+    try:
+        assert store.snapshot(ordinary) == store.snapshot(first)
+        assert store.revisions() == [first]
+        assert store.pair(ordinary)[0] == store.pair(ordinary)[1]
+    finally:
+        store.close()
+    preview = gc.prepare(repo, IDENTITY, snapshot(2))
+    assert preview["before"] == snapshot(1) and preview["base"]["head"] == ordinary
+    result = gc.commit(preview, "layout two")["git_commit"]
+    assert gc.git(repo, "show", "-s", "--format=%P", result).stdout.decode().strip() == ordinary

@@ -48,6 +48,8 @@ def revision(repo):
         if not path.is_absolute():
             path = repo / path
         if path.exists():
+            if marker == 'MERGE_HEAD':
+                raise ValueError('An active Git merge is in progress. Open Layout Diff > Merge to resolve layouts, then finish the merge in your Git tool before Save & Commit')
             raise ValueError("Finish the current Git merge/rebase/cherry-pick before committing a layout")
     return {"branch": branch, "head": head}
 

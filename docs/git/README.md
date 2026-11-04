@@ -53,7 +53,7 @@ Standalone runtime chains are read-only GUI inputs; GUI commits write Git snapsh
 
 ## Graphical branch integration
 
-**CIW > Layout Diff > Merge branches...** starts a transaction from the selected
+**CIW > Layout Diff > Merge / Resolve active conflicts...** starts a transaction from the selected
 repository's current attached branch. Incoming refs are pinned to commit IDs in
 the entered order. Each incoming branch is integrated with a separate two-parent
 commit; already-integrated ancestors are skipped. A unique common ancestor is
@@ -90,6 +90,42 @@ replayable archive. Removing a whole incomplete cell is refused while its omissi
 audit needs preservation. Explicitly ignored routes, markers and Steiners remain
 ignored.
 
+## Existing Git merge
+
+When `MERGE_HEAD` exists, **Resolve active Git merge** opens the layouts in that
+merge. Supported managed v1/v2 bundles are recognized by their encoded paths.
+Inputs come from Base, HEAD and MERGE_HEAD blobs; conflict-marker text is never
+parsed. Already resolved stage-0 layout bundles are preserved and validated.
+The initial implementation requires one incoming parent and one merge base.
+Legacy/unrecognized layout storage is reported for migration.
+
+After every cell passes graphical validation, **Stage layout resolutions**
+regenerates its managed bundle, locks the original index, copies the latest index,
+and replaces only the selected layout entries and worktree files. Unrelated
+staged files, unstaged edits and ordinary-file conflict stages remain intact.
+There is no commit, publication, hook execution, or `git merge --abort`. Review
+all staged files and finish the merge in your normal Git tool. Omission audits
+require the same two loss confirmations before staging.
+
+The source branch, parent IDs, managed index entries and managed worktree bytes
+are pinned. Changes to those inputs require reopening; unrelated-file work may
+continue. A staging journal and before-file backup permit recovery of interrupted
+installation. Resume refuses newer conflicting edits rather than overwriting them.
+Discard releases only this editor's helper worktree. It leaves the active merge
+and prior staged resolutions in place.
+
+## Ordinary commits and staged files
+
+| Situation | Behavior |
+| --- | --- |
+| Commit changes no layouts | Visible in Git-centric history; changed-cell list is empty. Cell-centric history skips it. Snapshot lookup retains the latest applicable layout. |
+| Save & Commit with unrelated staged/unstaged files | Only the selected layout and required attributes enter the commit; other staged blobs and worktree edits are retained. Applies to v1 and v2. |
+| Managed layout files already dirty/staged | Save & Commit refuses to overwrite them. |
+| Save & Commit during an active merge | Directs the user to Merge; finish the Git merge first. |
+| Start a new isolated branch merge with staged/local files | Refused until the original checkout is clean. |
+| Active merge with other staged files/conflicts | Stages layouts only; other files remain for the normal Git workflow. |
+| Incoming branch has no managed layout changes | Isolated integration can create its ordinary two-parent commit without a cell editor. |
+
 ## Semantic text conversion
 
 For explicit single-file snapshots, run from an activated environment:
@@ -122,5 +158,6 @@ when exporting a directory snapshot with omission sidecars. See
 | [store.py](../../layoutdiff/git/store.py) | Immutable snapshot discovery and reads |
 | [commit.py](../../layoutdiff/git/commit.py) | Preview, stale checks, isolated commit and rollback |
 | [merge.py](../../layoutdiff/git/merge.py) | Pinned branch preparation, cell validation, two-parent commits and publication |
+| [active_merge.py](../../layoutdiff/git/active_merge.py) | Active-merge discovery, staged-input preservation and layout-only resolution staging |
 | [tools.py](../../layoutdiff/git/tools.py) | Local setup, extraction and semantic textconv |
 | [driver.py](../../layoutdiff/git/driver.py) | Textconv executable entry |

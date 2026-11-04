@@ -43,6 +43,14 @@ def scratch_root():
     return root
 
 
+def open_repository(path):
+    """Resume either an isolated merge or a resolver for an existing merge."""
+    if read_json(Path(path) / 'repository.json').get('mode') == 'active':
+        from layoutdiff.git.active_merge import ActiveMerge
+        return ActiveMerge(path)
+    return RepositoryMerge(path)
+
+
 class RepositoryMerge:
     @classmethod
     def create(cls, path, repo, incoming):
@@ -312,7 +320,8 @@ class RepositoryMerge:
 
     def cleanup(self):
         """Only completed/explicitly cancelled transactions release Git resources."""
-        if self.state['phase'] not in {'published', 'cancelled'}:
+        if self.state['phase'] not in {'published', 'cancelled'} and not (
+                self.state.get('mode') == 'active' and self.state['phase'] == 'staged'):
             raise ValueError('Suspend retains the preparation worktree for recovery')
         if self.work.exists():
             # Git verifies that this is a registered linked worktree.
