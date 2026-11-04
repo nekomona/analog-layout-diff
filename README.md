@@ -13,6 +13,7 @@
   <a href="docs/eda/virtuoso/README.md"><img src="https://img.shields.io/badge/Virtuoso-OA_%2F_ROD-65bfa9?style=flat-square" alt="Virtuoso OA and ROD"/></a>
   <a href="docs/eda/klayout/README.md"><img src="https://img.shields.io/badge/KLayout-GDS_%2F_OASIS-759be8?style=flat-square" alt="KLayout GDS and OASIS adapter"/></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/contributions-welcome-65bfa9?style=flat-square" alt="Contributions welcome"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-65bfa9?style=flat-square" alt="MIT License"/></a>
 </p>
 
 <p align="center">
@@ -161,3 +162,7 @@ python scripts/check_publication.py
 
 Public examples and fixtures use synthetic data. Keep agent instructions, site
 configuration and captured designs in ignored local storage.
+
+## License
+
+Distributed under the [MIT License](LICENSE).
