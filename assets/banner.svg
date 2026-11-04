@@ -1,6 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="440" viewBox="0 0 1440 440" role="img" aria-labelledby="title desc">
   <title id="title">See the change. Keep the context.</title>
-  <desc id="desc">An original conceptual illustration of a synthetic IC layout comparison. Gray figures provide context, green shows additions, orange shows movement, and dashed coral outlines show deletions. A Git timeline connects the two revisions.</desc>
+  <desc id="desc">An original conceptual illustration of a synthetic IC layout comparison. Gray current-version geometry stays solid beneath breathing green addition and orange movement highlights. Dashed coral outlines show deletions without solid geometry beneath them. A Git timeline connects the two revisions.</desc>
+  <style>
+    .context-wires { fill: none; stroke: #637991; stroke-width: 14; stroke-linejoin: round; opacity: 1; }
+    .context-devices { fill: #7d91aa; stroke: #9aafc6; stroke-width: 1.5; opacity: 1; }
+  </style>
   <defs>
     <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1426"/><stop offset="1" stop-color="#152b3b"/></linearGradient>
     <linearGradient id="accent"><stop stop-color="#67e8d1"/><stop offset="1" stop-color="#79c8ff"/></linearGradient>
@@ -30,16 +34,31 @@
     <circle cx="677" cy="76" r="4" fill="#75e6d1"/>
     <text x="692" y="81" fill="#d1e0ee" font-size="14">LAYOUT REVIEW</text>
     <text x="1229" y="81" fill="#90a6bd" font-size="12">ILLUSTRATION</text>
-    <g fill="none" stroke="#637991" stroke-width="14" stroke-linejoin="round">
+    <g class="context-wires">
       <path d="M706 289V147H845V195H984"/>
       <path d="M706 248H870V308H1116V151H1311"/>
       <path d="M962 150V248H1042V204H1311"/>
     </g>
-    <g fill="#7d91aa" stroke="#9aafc6" stroke-width="1.5">
+    <g class="context-devices">
       <rect x="691" y="269" width="30" height="49" rx="3"/><rect x="947" y="132" width="30" height="39" rx="3"/>
       <rect x="1295" y="133" width="30" height="36" rx="3"/>
       <use href="#via" x="845" y="195"/><use href="#via" x="870" y="248"/><use href="#via" x="1042" y="248"/>
     </g>
+    <g id="current-layout-changes">
+      <g class="context-wires">
+        <path d="M1116 308H1250V248H1311"/>
+        <path d="M991 196V276H1067"/>
+      </g>
+      <g class="context-devices">
+        <use href="#via" x="1250" y="248"/>
+        <rect x="1295" y="232" width="30" height="34" rx="3"/>
+        <use href="#via" x="991" y="196"/>
+        <rect x="1063" y="267" width="27" height="19" rx="3"/>
+      </g>
+    </g>
+    <g class="diff-markers">
+    <animate attributeName="opacity" values="1;0;1" keyTimes="0;0.5;1" dur="3.6s" calcMode="spline" keySplines="0.42 0 0.58 1;0.42 0 0.58 1" repeatCount="indefinite"/>
+    <g id="diff-highlight-shapes">
     <path d="M1116 308H1250V248H1311" stroke="#65e6a5" stroke-width="15" stroke-linejoin="round" fill="none"/>
     <g fill="#65e6a5" stroke="#a0f5c5"><use href="#via" x="1250" y="248"/><rect x="1295" y="232" width="30" height="34" rx="3"/></g>
     <rect x="914" y="183" width="45" height="27" rx="4" fill="none" stroke="#ff8b8f" stroke-width="3" stroke-dasharray="6 5"/>
@@ -48,6 +67,8 @@
     <use href="#via" x="991" y="196" fill="#ffbf69" stroke="#ffe1ab"/>
     <path d="M959 171H986M979 165L986 171L979 177" fill="none" stroke="#ffbf69" stroke-width="2"/>
     <rect x="1063" y="267" width="27" height="19" rx="3" fill="#ffbf69" stroke="#ffe1ab"/>
+    </g>
+    </g>
     <g font-size="12" fill="#b1c4d7">
       <rect x="678" y="338" width="10" height="10" rx="2" fill="#7d91aa"/><text x="695" y="347">Context</text>
       <rect x="779" y="338" width="10" height="10" rx="2" fill="#65e6a5"/><text x="796" y="347">Added</text>

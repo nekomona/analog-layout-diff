@@ -1,7 +1,10 @@
 # Analog Layout Diff
 
 <p align="center">
-  <img src="assets/banner.svg" alt="Conceptual IC layout review with additions, movement, deleted outlines and a Git checkpoint timeline" width="100%"/>
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="assets/banner-static.svg"/>
+    <img src="assets/banner.svg" alt="Conceptual IC layout review with additions, movement, deleted outlines and a Git checkpoint timeline" width="100%"/>
+  </picture>
 </p>
 
 <p align="center">
@@ -71,9 +74,9 @@ operations retain all captured detail.
 | Start here | What you need | Guide |
 | --- | --- | --- |
 | Compare existing snapshots | Python and input files; Git for repository operations | [CLI](docs/ui/CLI.md) |
-| Capture or reconstruct a Virtuoso cell | Running Virtuoso, Bridge connection, technology and masters | [Bridge setup](docs/runtime/BRIDGE.md) |
+| Want to commit, compare, review diffs, or merge layouts in Virtuoso? | Running Virtuoso, Bridge connection, technology and masters; deploy the Layout Diff runtime for the native GUI | [Bridge setup](docs/runtime/BRIDGE.md) |
 | Use the Virtuoso toolbar | Bridge plus the deployed Layout Diff runtime on the Linux host | [Manual deployment](docs/runtime/DEPLOYMENT.md) |
-| Review GDS/OASIS or render a diff image | KLayout Python bindings; no Virtuoso connection needed | [KLayout](docs/eda/klayout/README.md) |
+| Want to review layouts entirely with open-source tools? | KLayout Python bindings for GDS/OASIS review and diff images; no Virtuoso connection needed | [KLayout](docs/eda/klayout/README.md) |
 
 ## Quick start
 
