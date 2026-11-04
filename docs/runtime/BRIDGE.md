@@ -110,9 +110,11 @@ flowchart LR
 | Installed GUI worker | `VirtuosoClient.local(port=port)` connects directly on the Virtuoso host | Host-local files; no desktop SSH configuration is read |
 | Python adapter integration | Caller supplies a configured client, including `from_env(profile=...)` or `from_tunnel(...)` | Follows the supplied client and adapter context |
 
-The Layout Diff CLI and installer have no Bridge `--profile` or `--env` flags.
-They use Bridge's resolved default, including a virtual-environment profile
-binding. For multiple profiles, bind the active environment with
+The native Layout Diff CLI uses Bridge's resolved default, including a
+virtual-environment profile binding. The deployment installer additionally
+accepts `--profile NAME` to select a connection explicitly; see
+[manual deployment](DEPLOYMENT.md). For native CLI work with multiple profiles,
+bind the active environment with
 `virtuoso-bridge profile bind MY_PROFILE --venv`, or supply an explicitly selected
 client when using the Python adapter. A `-p` passed only to a separate Bridge CLI
 command does not select the profile for a later Layout Diff process.

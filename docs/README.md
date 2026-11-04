@@ -24,6 +24,7 @@ for the complete capture-to-review flow.
 | Component | Guide |
 | --- | --- |
 | External Virtuoso Bridge dependency and connections | [Bridge integration](runtime/BRIDGE.md) |
+| Manual installation, updates and loading the toolbar | [Deployment guide](runtime/DEPLOYMENT.md) |
 | Optional C++ kernel | [Native performance backend](native-performance/README.md) |
 | EDA subpackages | [Virtuoso](eda/virtuoso/README.md), [KLayout](eda/klayout/README.md) |
 | Cross-package GUI requests | [Interaction sequences](ui/INTERACTION_SEQUENCES.md) |

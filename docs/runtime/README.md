@@ -20,6 +20,9 @@ The worker verifies the bridge endpoint's process identity before UI/database wo
 
 ## Deployment
 
+For a step-by-step install, update, later CIW load and verification checklist,
+use the [manual deployment guide](DEPLOYMENT.md).
+
 Use a virtual environment with both packages installed and a working SSH-backed
 Bridge connection. The installer requires Layout Diff nested inside the Bridge
 source checkout, reading `../src/virtuoso_bridge` and `../pyproject.toml`; see
