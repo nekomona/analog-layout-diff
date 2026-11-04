@@ -68,15 +68,15 @@ procedure(ALDGUIBrowserCreate()
         list(categories 412:478 848:166 0) list(previous 412:654 120:28)
         list(pageLabel 540:654 592:28 0) list(next 1140:654 120:28)
         list(title 412:691 848:25 0) list(patch 412:724 848:104 0)
-        list(status 10:838 1250:24 0)
-        list(hiCreateSeparatorField(?name 'aldDiagnosticsSeparator) 10:870 1250:0)
-        list(hiCreateButton(?name 'aldRuntime ?buttonText "Diagnostics / background..." ?callback "ALDRuntimePanel()") 10:880 240:26))
+        list(hiCreateSeparatorField(?name 'aldDiagnosticsSeparator) 10:838 1250:0)
+        list(status 10:848 980:28 0)
+        list(hiCreateButton(?name 'aldRuntime ?buttonText "Diagnostics / background..." ?callback "ALDRuntimePanel()") 1000:848 260:28))
       x=10 widths=list(75 135 115 160 120 130 120 200)
       foreach(button buttons
         fields=append(fields list(list(button list(x 40) list(car(widths) 28))))
         x=x+car(widths)+8 widths=cdr(widths))
       ALDGUIHistoryForm=hiCreateAppForm(?name 'ALDGUIHistoryForm ?formTitle "Layout Diff - Git History & Changes"
-        ?fields fields ?initialSize list(1280 970) ?minSize list(1280 970) ?buttonLayout 'Close
+        ?fields fields ?initialSize list(1280 930) ?minSize list(1280 930) ?buttonLayout 'Close
         ?callback 'ALDGUIBrowserClosed ?dontBlock t ?dialogStyle 'modeless)
       hiInstantiateForm(ALDGUIHistoryForm))
     ALDGUIHistoryForm))
