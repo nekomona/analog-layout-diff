@@ -22,6 +22,24 @@ technology/master definitions and the target Virtuoso version. See the
 Local execution logs, installation snapshots and design measurements belong in
 ignored local storage and do not form part of the public documentation.
 
+## Agent and MCP checks
+
+`tests/test_agent.py` uses real synthetic Git repositories for v1/v2 conflict
+explanations, preserved staged resolutions, semantic movement/stretch pairing,
+secondary connectivity changes, cached pages, stale-input rejection, batch merge
+decisions, export guards and failed-write rollback. It checks that explanation
+leaves files/index unchanged and writes leave staging/commits to the caller.
+`tests/test_agent_mcp.py` exercises the standalone stdio catalog, Bridge transport
+exceptions, request-ID recovery, SKILL string escaping and paged results.
+
+Live checks additionally require the updated worker in the intended CIW. Verify
+`layout_capabilities`, submit/retrieve a read-only diff, explain a disposable
+Git conflict and compare its index/files before and after. Exercise export and
+native-validated merge writes only with synthetic layouts in a dedicated test
+library; verify source modification state and native readback separately. If the
+configured Bridge/CIW is unavailable, report file-only remote checks separately
+from unverified SKILL/native behavior. See the [agent guide](../agent/README.md).
+
 ## Graphical merge checks
 
 `test_merge.py`, `test_merge_relationships.py`, `test_merge_index.py` and

@@ -70,6 +70,10 @@ meaning without changing stored identity. `eda` owns the Virtuoso and KLayout
 interfaces over that common data. `git` owns snapshot history and transactions.
 `ui` combines native capture, comparison and Git into user workflows;
 `runtime` owns the host processes and temporary-resource lifetime.
+`agent` exposes the same comparison and merge decisions through the remote worker.
+The standalone local `mcp/layoutdiff_server.py` proxy uses Bridge SKILL calls;
+Git access and analysis remain on the remote host. See the
+[agent interface](../agent/README.md) for transport and existing-conflict workflows.
 
 ## Source layout and entry points
 
@@ -80,6 +84,11 @@ layoutdiff/
   cli.py                  Compatibility console-entry facade
   git_driver.py           Compatibility for existing textconv configurations
   virtuoso.py             Compatibility for former public adapter exports
+  agent/
+    service.py            Remote requests, semantic pages and cached merge plans
+    analysis.py           Structured viewer/merge decision explanations
+    repository.py         Existing Git reads and guarded worktree writes
+    __main__.py           Optional file-only remote runner through Bridge SSH
   data/
     core.py               Canonical values, identities, exact reference diff/apply
     storage.py            Streaming v2 snapshot codec and validation
@@ -137,7 +146,7 @@ layoutdiff/
     worker.py             GuiWorker and workflow orchestration
     browser.py            Cell/repository history presentation models
     restore.py            Confirmed checkpoint-restore state machine
-    skill/                gui.il, browser.il, workflow.il, runtime.il
+    skill/                gui.il, browser.il, workflow.il, runtime.il, agent.il
   runtime/
     __main__.py           Stable python -m layoutdiff.runtime entry
     supervisor.py         supervise / worker / reap modes

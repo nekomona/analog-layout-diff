@@ -77,6 +77,7 @@ operations retain all captured detail.
 | Compare existing snapshots | Python and input files; Git for repository operations | [CLI](docs/ui/CLI.md) |
 | Want to commit, compare, review diffs, or merge layouts in Virtuoso? | Running Virtuoso, Bridge connection, technology and masters; deploy the Layout Diff runtime for the native GUI | [Bridge setup](docs/runtime/BRIDGE.md) |
 | Use the Virtuoso toolbar | Bridge plus the deployed Layout Diff runtime on the Linux host | [Manual deployment](docs/runtime/DEPLOYMENT.md) |
+| Let a local agent analyze or resolve remote layout changes | Local stdio MCP proxy using the existing Bridge connection and remote Layout Diff worker | [Agent tools](docs/agent/README.md) |
 | Want to review layouts entirely with open-source tools? | KLayout Python bindings for GDS/OASIS review and diff images; no Virtuoso connection needed | [KLayout](docs/eda/klayout/README.md) |
 
 ## Quick start

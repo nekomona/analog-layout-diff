@@ -114,8 +114,15 @@ class MergeSession:
         return self.plan.unresolved(self.state['resolved'])
 
     def preview(self, unit_id, choice, generation):
+        return self.preview_many({unit_id: choice}, generation)
+
+    def preview_many(self, decisions, generation):
         self.check(generation)
-        choices = {**self.state['choices'], unit_id: choice}
+        if not isinstance(decisions, dict) or set(decisions) - self.plan.units.keys():
+            raise ValueError('Unknown merge decision')
+        for ident, choice in decisions.items():
+            self.plan.candidate(ident, choice)
+        choices = {**self.state['choices'], **decisions}
         before = self.plan.result(self.state['choices'])
         after = self.plan.result(choices)
         # Retain custom edits outside the selected decision. Overlapping edits
@@ -141,6 +148,17 @@ class MergeSession:
             state['choices'][unit_id] = choice
             state['resolved'][unit_id] = choice
             return self._decision({'unit': unit_id, 'choice': choice}, snapshot, state)
+
+    def decide_many(self, decisions, generation, *, validated_digest=None):
+        """Accept a batch as one generation/undo step, preserving custom edits."""
+        with self.lock(generation):
+            snapshot = self.preview_many(decisions, generation)
+            if validated_digest is not None and digest(snapshot) != validated_digest:
+                raise ValueError('Preview changed before acceptance')
+            state = copy.deepcopy(self.state)
+            state['choices'].update(decisions)
+            state['resolved'].update(decisions)
+            return self._decision({'decisions': decisions}, snapshot, state)
 
     def _decision(self, action, snapshot, state):
         # Undo entries reference compact, immutable before/after state and patch.

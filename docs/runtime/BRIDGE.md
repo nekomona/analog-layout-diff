@@ -19,6 +19,12 @@ replay SKILL through that connection; Bridge does not define Layout Diff's
 snapshot format, Git history or comparison rules. The supplied installer deploys
 copies of both source packages and installs them together in the host environment.
 
+For local agents working with a remote project, the [agent interface](../agent/README.md)
+provides a local stdio MCP proxy over this same connection. Remote SKILL mailbox
+functions hand requests to the existing Layout Diff worker and return bounded
+JSON results. No remote MCP listener is needed; Git and semantic analysis stay
+on the Virtuoso host. Direct Bridge agents can use the mailbox without MCP.
+
 | Operation | Needs Virtuoso Bridge? | Other requirements |
 | --- | --- | --- |
 | File-only diff/apply, encode/decode, standalone chain replay, offline Git snapshot reads | No | Python and input files; Git for Git operations |

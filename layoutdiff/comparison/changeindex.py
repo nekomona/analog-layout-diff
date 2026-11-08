@@ -75,6 +75,14 @@ class ChangeIndex:
             text += operation_excerpt(strict_json(raw))
         return {"title": label, "text": text, "page": page, "pages": pages, "count": n}
 
+    def records(self, *, category=None, status=None):
+        """Paired semantic records for non-GUI clients, with matching evidence."""
+        for label, raw in self.db.execute(
+                'SELECT category,op FROM changes WHERE (? IS NULL OR category=?) '
+                'AND (? IS NULL OR status=?) ORDER BY category,key',
+                (category, category, status, status)):
+            yield label, strict_json(raw)
+
     def full(self, index=None):
         yield self.overview() + "\n"
         for label, *_ in self.rows if index is None else [self.rows[index]]:

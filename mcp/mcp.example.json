@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "layoutdiff": {
+      "command": "/absolute/local/bridge-venv/bin/python",
+      "args": [
+        "/absolute/local/analog-layout-diff/mcp/layoutdiff_server.py",
+        "--env", "/absolute/local/bridge.env",
+        "--profile", "MY_PROFILE"
+      ]
+    }
+  }
+}

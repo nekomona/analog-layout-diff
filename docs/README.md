@@ -18,12 +18,14 @@ for the complete capture-to-review flow.
 | `git` | Immutable snapshot history, commit transactions and semantic Git tools | [Git guide](git/README.md) |
 | `ui` | CLI, native toolbar, history browser, review and checkpoint restore | [UI guide](ui/README.md) |
 | `runtime` | Deployment, process identity, worker ownership and resource cleanup | [Runtime guide](runtime/README.md) |
+| `agent` | Semantic requests over Bridge, conflict explanations and guarded snapshot writes | [Agent guide](agent/README.md) |
 
 ## Supporting components
 
 | Component | Guide |
 | --- | --- |
 | External Virtuoso Bridge dependency and connections | [Bridge integration](runtime/BRIDGE.md) |
+| Local MCP/Bridge agents and existing Git merge conflicts | [Agent interface](agent/README.md) |
 | Manual installation, updates and loading the toolbar | [Deployment guide](runtime/DEPLOYMENT.md) |
 | Optional C++ kernel | [Native performance backend](native-performance/README.md) |
 | EDA subpackages | [Virtuoso](eda/virtuoso/README.md), [KLayout](eda/klayout/README.md) |
@@ -36,6 +38,7 @@ for the complete capture-to-review flow.
 ```text
 docs/
   architecture/          Package/process map and cross-package pipeline
+  agent/                 Semantic MCP tools through the existing remote Bridge
   data/                  Model, logical/storage formats and performance
   comparison/            Matching, classification, groups and paging
   eda/

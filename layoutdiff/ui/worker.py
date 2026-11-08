@@ -113,6 +113,7 @@ class GuiWorker:
         self.repository_browser = None
         self.restore_plans = {}
         self.merge_controller = None
+        self.agent_service = None
         self.active_work = None
         self.temp_session = None
         self.legacy_cleanup_at = 0
@@ -152,6 +153,29 @@ class GuiWorker:
         self.execute(f"ALDGUIOwner={sk(self.token)} ALDGUIQueue=nil ALDGUIInstallQuickKey() ALDGUIAttachAll()")
         atomic_json(self.root / "worker.json", {"pid": os.getpid(), "session": self.token,
                     "root": str(self.root), "review_library": self.review_library})
+        self.install_agent()
+
+    def install_agent(self):
+        from layoutdiff.agent.service import AgentService
+        if self.agent_service:
+            self.agent_service.close()
+        self.agent_service = AgentService(self.root / 'agent', adapter=self.adapter,
+            source_state=lambda identity: loads(self.execute('ALDAgentSourceState(' + ' '.join(map(sk, identity)) + ')')),
+            save_source=lambda identity: self.execute('ALDAgentSave(' + ' '.join(map(sk, identity)) + ')'),
+            native_validate=self.validate_agent_snapshot)
+        self.agent_service.recover()
+        checked(self.client.load_il(Path(__file__).parent / 'skill' / 'agent.il'))
+        self.execute('ALDAgentRoot=' + sk(str(self.agent_service.root)))
+
+    def validate_agent_snapshot(self, snapshot):
+        if not snapshot['objects']:
+            return {'empty': True, 'dependency_warnings': []}
+        with self.work_area(independent=True) as area:
+            lib = self.temporary_library(snapshot['objects']['cell:']['technology'])
+            adapter = VirtuosoAdapter(self.client, area['path'], writable_library=lib)
+            adapter.reconstruct(snapshot, lib, 'agent_validation')
+            return {'dependency_warnings': adapter.last_dependency_warnings,
+                    'readback_normalization': adapter.last_readback_normalization}
 
     def git_repository(self):
         working = loads(self.execute("getWorkingDir()"))
@@ -244,6 +268,8 @@ class GuiWorker:
         return lib
 
     def close(self):
+        if self.agent_service:
+            self.agent_service.close()
         if self.merge_controller:
             for state in self.merge_controller.opened.values():
                 state['view'].close()
@@ -888,6 +914,7 @@ class GuiWorker:
         return results
 
     def poll(self):
+        agent_count = self.agent_service.poll() if self.agent_service else 0
         if time.monotonic() >= self.legacy_cleanup_at:
             self.clean_reviews()
             self.legacy_cleanup_at = time.monotonic() + 15
@@ -935,7 +962,7 @@ class GuiWorker:
                     except Exception as notification:
                         entry["notification_error"] = str(notification)[:2000]
                 atomic_json(self.root / "requests" / (uuid.uuid4().hex + ".json"), entry)
-        return len(requests)
+        return len(requests) + agent_count
 
     def serve(self):
         lock = self.root / "worker.lock"
