@@ -1,9 +1,12 @@
 """Standalone local MCP proxy and its bounded, non-replaying Bridge transport."""
 import importlib.util
 import json
+import os
+import shlex
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 import pytest
 
 from layoutdiff.agent import PROTOCOL
@@ -124,3 +127,32 @@ def test_partial_transport_pages_resume_without_submission():
     assert result['status'] == 'retrieving' and calls == [0]
     result = proxy.call('layout_result', {'request_id': 'paged'})
     assert result == json.loads(raw) and calls == list(range(len(pages)))
+
+
+def test_ssh_transport_uses_host_runner_and_reconciles_lost_submission(tmp_path):
+    """Run the real headless CLI through a local substitute for Bridge's SSH."""
+    repo = tmp_path / 'repository with spaces'; repo.mkdir()
+    from layoutdiff.git.commit import git
+    git(repo, 'init')
+    class Runner:
+        submissions = 0
+        def run_command(self, command, timeout=None):
+            args = shlex.split(command)
+            assert args[0] == '/remote/python'
+            args[0] = sys.executable
+            args[args.index('--root') + 1] = str(tmp_path / 'state')
+            completed = subprocess.run(args, text=True, capture_output=True, timeout=timeout,
+                env={**os.environ, 'GIT_CEILING_DIRECTORIES': str(tmp_path)})
+            if '--submit' in args:
+                self.submissions += 1
+                raise TimeoutError('Accepted request; SSH receipt lost')
+            return SimpleNamespace(returncode=completed.returncode, stdout=completed.stdout, stderr=completed.stderr)
+    runner = Runner()
+    proxy = mcp.SSHProxy(python='/remote/python', root='/remote/state', runner=runner)
+    caps = proxy.call('layout_capabilities', {})
+    assert caps['native_capture'] is False and caps['native_backend'] == 'none'
+    response = proxy.call('layout_merge_explain', {'repository': str(repo), 'request_id': 'once'})
+    assert response['status'] == 'transport_unknown' and runner.submissions == 1
+    result = proxy.call('layout_result', {'request_id': 'once'})
+    assert result['status'] == 'complete' and result['result']['active_merge'] is False
+    assert runner.submissions == 1

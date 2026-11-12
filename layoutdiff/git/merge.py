@@ -19,10 +19,8 @@ from layoutdiff.data.merge_session import MergeSession
 from layoutdiff.data.storage import from_snapshot, FILES
 from layoutdiff.git.commit import git, discover, revision, json_bytes
 from layoutdiff.git.store import GitSnapshots, path_identity, snapshot_directory, snapshot_path, blob
-
-
-def resolve(repo, ref):
-    return git(repo, 'rev-parse', '--verify', '--end-of-options', ref + '^{commit}').stdout.decode().strip()
+from layoutdiff.git.compat import resolve
+from layoutdiff.git import scratch
 
 
 def clean(repo):
@@ -70,9 +68,10 @@ class RepositoryMerge:
         state = {'schema': 'layoutdiff-repository-merge/1', 'repo': str(repo), 'original': original,
                  'incoming': pinned, 'step': 0, 'head': original['head'], 'worktree': str(work),
                  'phase': 'created', 'commits': [], 'cells': {}, 'files': {},
-                 'ref': 'refs/layoutdiff/merges/' + uuid.uuid4().hex}
+                 'ref': 'refs/layoutdiff/merges/' + uuid.uuid4().hex,
+                 'checkout_backend': scratch.select(repo)}
         atomic_json(path / 'repository.json', state)
-        git(repo, 'worktree', 'add', '--detach', str(work), original['head'])
+        scratch.create(state)
         result = cls(path)
         result.begin()
         return result
@@ -94,7 +93,7 @@ class RepositoryMerge:
         if s['phase'] not in {'created', 'between', 'preparing'}:
             raise ValueError('This merge step is already prepared')
         if s['phase'] == 'created' and not self.work.exists():
-            git(self.repo, 'worktree', 'add', '--detach', str(self.work), s['head'])
+            scratch.create(s)
         while s['step'] < len(s['incoming']):
             incoming = s['incoming'][s['step']]['sha']
             if git(self.repo, 'merge-base', '--is-ancestor', incoming, s['head'], check=False).returncode == 0:
@@ -181,7 +180,7 @@ class RepositoryMerge:
                'incoming': self.state['incoming'][self.state['step']]['sha']}[side]
         entry = git(self.work, 'ls-tree', '-z', rev, '--', path).stdout
         if entry:
-            git(self.work, 'restore', '--source=' + rev, '--staged', '--worktree', '--', path)
+            git(self.work, 'checkout', rev, '--', path)
         else:
             git(self.work, 'rm', '-f', '--ignore-unmatch', '--', path)
         self.state['files'][path] = side
@@ -190,7 +189,7 @@ class RepositoryMerge:
     def _write_cell(self, cell):
         session = MergeSession(cell['session'])
         if cell['validated'] != {'head': session.head, 'digest': digest(session.snapshot)} or session.unresolved():
-            raise ValueError('Validate every affected cell in the graphical editor before committing')
+            raise ValueError('Validate every affected cell at its current snapshot before committing')
         identity = cell['identity']
         prefix = snapshot_directory(identity)
         # Refuse symlink traversal before writing managed regular files.
@@ -260,6 +259,7 @@ class RepositoryMerge:
         self.save()
         path = self.path / 'message.txt'; path.write_text(message, encoding='utf-8')
         try:
+            scratch.sync_policy(s)
             git(self.work, 'commit', '--file', str(path))
         except BaseException:
             if resolve(self.work, 'HEAD') == s['head']:
@@ -282,7 +282,7 @@ class RepositoryMerge:
         tree = git(self.work, 'show', '-s', '--format=%T', result).stdout.decode().strip()
         if tree != s['expected_tree']:
             raise ValueError('A Git hook changed the validated tree; inspect the isolated worktree before publication')
-        git(self.repo, 'update-ref', s['ref'], result)
+        scratch.retain(s, result)
         s['commits'].append(result); s['head'] = result; s['step'] += 1; s['phase'] = 'between'
         self.save()
         self.begin()
@@ -323,9 +323,7 @@ class RepositoryMerge:
         if self.state['phase'] not in {'published', 'cancelled'} and not (
                 self.state.get('mode') == 'active' and self.state['phase'] == 'staged'):
             raise ValueError('Suspend retains the preparation worktree for recovery')
-        if self.work.exists():
-            # Git verifies that this is a registered linked worktree.
-            git(self.repo, 'worktree', 'remove', '--force', str(self.work))
+        scratch.remove(self.state)
         if self.work.parent.exists() and self.work.parent.name.startswith('ald-merge-git-'):
             self.work.parent.rmdir()
         git(self.repo, 'update-ref', '-d', self.state['ref'])

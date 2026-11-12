@@ -21,11 +21,8 @@ from layoutdiff.data.streaming import file_digest
 from layoutdiff.git.commit import git
 from layoutdiff.git.merge import RepositoryMerge, resolve, scratch_root
 from layoutdiff.git.store import GitSnapshots, path_identity, snapshot_path, snapshot_directory, blob
-
-
-def git_path(repo, name):
-    p = Path(git(repo, 'rev-parse', '--git-path', name).stdout.decode().strip())
-    return p if p.is_absolute() else Path(repo) / p
+from layoutdiff.git.compat import git_path
+from layoutdiff.git import scratch
 
 
 def active_merge(repo):
@@ -47,7 +44,7 @@ def active_merge(repo):
     if len(parents) != 1 or len(bases) != 1:
         reason = 'The layout editor requires one incoming parent and one common merge base.'
     elif unsupported:
-        reason = 'Unrecognized or legacy layout storage needs migration before graphical resolution: ' + ', '.join(unsupported[:4])
+        reason = 'Unrecognized or legacy layout storage needs migration before semantic resolution: ' + ', '.join(unsupported[:4])
     return dict(head=head, branch=branch, parents=parents, base=bases[0] if len(bases)==1 else None,
                 cells=[list(v) for v in cells], conflicted=[list(v) for v in conflicted],
                 paths=paths, conflicts=conflicts, reason=reason)
@@ -142,11 +139,12 @@ class ActiveMerge(RepositoryMerge):
             original={'branch': info['branch'], 'head': info['head']}, head=info['head'], base=info['base'],
             incoming=[{'label': 'Active MERGE_HEAD', 'sha': info['parents'][0]}], step=0, phase='preparing',
             worktree=str(work), ref='refs/layoutdiff/merges/' + uuid.uuid4().hex, commits=[], cells={},
+            checkout_backend=scratch.select(repo),
             files={p: None for p in info['conflicts'] if path_identity(p) is None}, paths=info['paths'],
             managed_paths=paths, source_index=hashlib.sha256(entries).hexdigest(),
             source_files=work_hashes(repo, paths), source_merge=info, index_entries=entries.decode())
         atomic_json(path / 'repository.json', state)
-        git(repo, 'worktree', 'add', '--detach', str(work), info['head'])
+        scratch.create(state)
         result = cls(path)
         result.begin()
         return result
@@ -167,7 +165,7 @@ class ActiveMerge(RepositoryMerge):
             raise ValueError('Active merge is already prepared')
         self.check_source()
         if not self.work.exists():
-            git(self.repo, 'worktree', 'add', '--detach', str(self.work), s['head'])
+            scratch.create(s)
         for identity in s['source_merge']['cells']:
             key = digest(identity)
             if key in s['cells']:

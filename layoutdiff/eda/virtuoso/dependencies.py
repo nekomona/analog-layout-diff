@@ -91,20 +91,25 @@ class HierarchyReader:
             except Exception as exc:
                 # Missing Python, SSH, or filesystem access cannot prohibit replay.
                 warnings.warn("Saved OA hashing unavailable; using timestamp hints: " + str(exc), DependencyWarning)
-        records = {}
-        for r in raw:
-            identity = [r[x] for x in ("libName", "cellName", "viewName")]
-            name = json.dumps(identity, ensure_ascii=True, separators=(",", ":"))
-            fingerprint = hashed.get(r["path"], {"status": "unavailable"})
-            if not r["resolved"]:
-                fingerprint = {"status": "unresolved"}
-            if fingerprint["status"] != "ok":
-                fingerprint = {**fingerprint, "method": "saved-time-hint", "savedTime": r["savedTime"]}
-            record = {"kind": "dependency", "name": name,
-                      **{k: r[k] for k in ("libName", "cellName", "viewName")},
-                      "pcell": bool(r["pcell"]), "fingerprint": fingerprint,
-                      "dirty": bool(r["dirty"]), "dirtyCounter": r["dirtyCounter"]}
-            if name in records and records[name] != record:
-                record["fingerprint"] = {"status": "unstable"}
-            records[name] = record
-        return list(records.values())
+        return normalized_dependencies(raw, hashed)
+
+
+def normalized_dependencies(raw, hashed):
+    """Normalize captured hierarchy rows, shared by Bridge and batch readers."""
+    records = {}
+    for r in raw:
+        identity = [r[x] for x in ("libName", "cellName", "viewName")]
+        name = json.dumps(identity, ensure_ascii=True, separators=(",", ":"))
+        fingerprint = hashed.get(r["path"], {"status": "unavailable"})
+        if not r["resolved"]:
+            fingerprint = {"status": "unresolved"}
+        if fingerprint["status"] != "ok":
+            fingerprint = {**fingerprint, "method": "saved-time-hint", "savedTime": r["savedTime"]}
+        record = {"kind": "dependency", "name": name,
+                  **{k: r[k] for k in ("libName", "cellName", "viewName")},
+                  "pcell": bool(r["pcell"]), "fingerprint": fingerprint,
+                  "dirty": bool(r["dirty"]), "dirtyCounter": r["dirtyCounter"]}
+        if name in records and records[name] != record:
+            record["fingerprint"] = {"status": "unstable"}
+        records[name] = record
+    return list(records.values())

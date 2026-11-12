@@ -49,8 +49,10 @@ Large layouts stay remote; the agent receives summaries and selected details.
 
 Existing installations need the updated Python package and a worker restart;
 copying the proxy alone does not install the remote functions. File-only tool
-discovery works before a Bridge connection is available. Actual operations
-require a responsive Bridge and running remote Layout Diff worker.
+discovery works before a Bridge connection is available. The default CIW
+transport requires a responsive Bridge and running remote Layout Diff worker.
+The [headless SSH transport](#headless-cli-and-ssh-transport) runs the installed
+package directly and needs neither a CIW nor the GUI worker.
 
 ## Tools
 
@@ -89,8 +91,10 @@ region; regions and bounds use snapshot DBU. `records=true` includes bounded
 before/after record summaries. Oversized field values include a preview, byte
 count and digest. The response identifies the remote pinned inputs and
 exact-operation file; access these paths through Bridge file APIs.
-Four diff analyses are cached. Evicted or restarted diff analyses must be
-recreated; their temporary exact-operation files expire with the cache.
+The CIW worker caches four diff analyses. Evicted or restarted CIW analyses must
+be recreated; their temporary exact-operation files expire with the cache.
+The headless runner persists pinned inputs and exact-operation files so later
+processes can retrieve the same analysis pages.
 
 ### Explain a merge started outside Layout Diff
 
@@ -144,8 +148,18 @@ Writes recheck the pinned HEAD, branch, merge head, managed-file hashes and
 selected index entries under an index lock. Changed inputs require a fresh
 analysis. A recovery journal records replaced files; errors attempt rollback
 without overwriting newer external edits. This is guarded multi-file publication,
-not a filesystem-wide atomic transaction. Incomplete snapshots with omission
-audits require the graphical preservation workflow.
+not a filesystem-wide atomic transaction.
+
+Incomplete snapshots retain their diagnostic reports. A write first returns
+`written=false`, the omission audit/warning and `omission_consent_required`.
+After inspecting these, make a new request with the returned token as
+`omission_consent`. The token binds the candidate snapshot, audit and pinned Git
+inputs; changes require a new preview. A merged incomplete cell cannot be deleted
+while its omission evidence needs preservation. Export is strict by default;
+`allow_incomplete=true` enables audited supported-only capture with the same
+preview/consent contract. These reports are diagnostic evidence, not replayable
+native content. Logical-only merge output still requires explicit
+`native_validation=false`.
 
 The response returns exact changed paths and `staged=false`. The caller runs
 normal **remote** Git commands to review/stage those paths, resolve other
@@ -195,9 +209,11 @@ ALDAgentResult("inspect_1" 0)
 pagination are separate. The proxy resumes partially fetched results.
 These functions accept JSON as data; they never evaluate agent-supplied code.
 
-For file-only jobs when Bridge's SSH interface is available but its CIW is not,
-upload a JSON request through Bridge and run this on the **remote host** using
-Bridge's existing SSH runner:
+## Headless CLI and SSH transport
+
+Run the installed package directly on the repository/OA host. Python 3.10+ and
+Git 1.8.3.1+ are required; file-only operations import neither Bridge nor GUI
+bindings. The same command can be reached through Bridge's existing SSH runner:
 
 ```sh
 /path/to/runtime/.venv/bin/python -m layoutdiff.agent \
@@ -206,10 +222,55 @@ Bridge's existing SSH runner:
   --payload /path/to/scratch/request.json
 ```
 
-Use a separate dedicated state root outside Git. This optional one-shot runner
-shares the request/result contract but has no live capture or native validation.
-It is not an automatic fallback for an uncertain submitted write, and it does
-not expose a remote MCP port. The local MCP proxy uses the SKILL path only.
+`python -m layoutdiff agent` is an equivalent CLI entry. `--payload -` reads JSON
+from stdin. `--describe` reports backend capabilities. Use `--submit` for a
+detached request, then `--result --request-id inspect_1` to retrieve it without
+submission. Reusing an ID with different arguments is refused. Kernel locking
+serializes headless jobs; after a worker crash, the next executed request marks
+unfinished running requests `unknown` rather than replaying them.
+
+Use a separate dedicated state root outside Git and outside the GUI worker's
+state. Headless diff inputs and exact-operation files persist there so
+`analysis_id` pagination survives process exit. They remain pinned when the
+project changes. Plans, receipts, captures and job logs also persist; remove
+them only during deliberate maintenance after reconciling uncertain outcomes.
+
+For the local stdio MCP proxy, select SSH explicitly:
+
+```sh
+python mcp/layoutdiff_server.py --transport ssh --profile MY_PROFILE \
+  --remote-python /path/to/runtime/.venv/bin/python \
+  --remote-root /path/to/scratch/headless-agent
+```
+
+The default `--transport ciw` retains the existing mailbox protocol. SSH uses
+Bridge's connection/profile but does not connect to a CIW, load `startup.il`,
+or expose a remote MCP port. Neither transport automatically falls back to the
+other after an uncertain response. Keep the same transport/state root and
+retrieve the original request ID.
+
+For native export and readback, add these options to either the host CLI or
+the SSH proxy:
+
+```sh
+--native-backend batch --virtuoso /path/to/virtuoso \
+  --virtuoso-cwd /projects/example --validation-library TEST_LIB
+```
+
+The working directory supplies `cds.lib`; the caller supplies the configured
+Cadence/PDK environment. Each job starts Virtuoso without a display or GUI
+plugin. Capture reads saved OA state (`capture_state="saved_oa"`); it cannot
+capture another process's unsaved edits, and `save=true` is unavailable.
+Diff selectors accept `saved_oa`; `live` on this backend also reports that it
+read saved OA. Native merge validation requires an existing dedicated writable
+library with matching technology and uses a unique fresh view, which it removes
+after readback. `--group-definition-source LIB CELL VIEW` supplies persisted
+custom group definitions. Omitting the batch backend leaves native capture and
+validation unavailable; it does not silently downgrade a write's validation.
+
+Export and merge writes return exact paths for ordinary system `git add`,
+`git commit` and `git log`. Headless tools do not wrap those commands or take
+ownership of the caller's staging policy.
 
 ## Verification boundaries
 

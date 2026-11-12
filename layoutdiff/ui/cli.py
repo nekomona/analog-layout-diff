@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 from layoutdiff.data.core import diff, apply_diff, digest
@@ -21,8 +22,13 @@ def live_dependency_check(snapshot, report):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == 'agent':
+        from layoutdiff.agent.__main__ import main as agent_main
+        return agent_main(argv[1:])
     parser = argparse.ArgumentParser(description="Single-parent Virtuoso layout snapshots and diffs")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser('agent', help='Headless semantic Git analysis, merge decisions and native export; use agent --help')
     sub.add_parser("backend-info", help="Show native accelerator verification and automatic selection policy")
     for command in ("encode-v2", "decode-v2"):
         p = sub.add_parser(command)
@@ -79,6 +85,12 @@ def main(argv=None):
     p = sub.add_parser("xor", help="Compare two exported GDS files, including text")
     p.add_argument("left"); p.add_argument("right")
     p.add_argument("--left-top"); p.add_argument("--right-top")
+    for command in ('capture', 'record', 'restore'):
+        p = sub.choices[command]
+        p.add_argument('--native-backend', choices=('bridge', 'batch'), default='bridge')
+        p.add_argument('--virtuoso', default='virtuoso', help='Batch Virtuoso executable')
+        p.add_argument('--virtuoso-cwd', help='Batch working directory containing cds.lib')
+        p.add_argument('--group-definition-source', nargs=3, metavar=('LIB', 'CELL', 'VIEW'))
     args = parser.parse_args(argv)
     if args.command == "backend-info":
         from layoutdiff.data.acceleration import info
@@ -126,15 +138,22 @@ def main(argv=None):
         History(args.history).init()
         print("Initialized", args.history)
     elif args.command in {"capture", "record", "restore"}:
-        from virtuoso_bridge import VirtuosoClient
         from layoutdiff.eda.virtuoso.adapter import VirtuosoAdapter, coverage
         artifacts = Path(args.history) / "captures" if args.command == "record" else Path(getattr(args, "snapshot", getattr(args, "output", "."))).resolve().parent / "artifacts"
-        adapter = VirtuosoAdapter(VirtuosoClient.from_env(), artifacts,
-                                  writable_library=getattr(args, "allow_library", "LAYOUT_DIFF_TEST"))
+        if args.native_backend == 'batch':
+            from layoutdiff.eda.virtuoso.batch import BatchAdapter
+            adapter = BatchAdapter(args.virtuoso, args.virtuoso_cwd, artifacts,
+                writable_library=getattr(args, 'allow_library', 'LAYOUT_DIFF_TEST'),
+                group_definition_source=args.group_definition_source)
+        else:
+            from virtuoso_bridge import VirtuosoClient
+            adapter = VirtuosoAdapter(VirtuosoClient.from_env(), artifacts,
+                                      writable_library=getattr(args, "allow_library", "LAYOUT_DIFF_TEST"))
         if args.command == "restore":
             from layoutdiff.data.storage import load
             snapshot = load(args.snapshot)
-            actual = adapter.reconstruct(snapshot, args.library, args.cell)
+            actual = adapter.reconstruct(snapshot, args.library, args.cell,
+                                         group_definition_source=args.group_definition_source)
             atomic_json(artifacts / "restored.layout.json", actual)
             print("Reconstructed; top-level content verified", args.library, args.cell, digest(actual))
             print("Dependency warnings:", len(adapter.last_dependency_warnings))

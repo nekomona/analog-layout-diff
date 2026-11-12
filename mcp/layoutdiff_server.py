@@ -2,13 +2,15 @@
 """Local stdio MCP proxy. Only stdlib and virtuoso-bridge are required locally.
 
 All Layout Diff imports, Git access and semantic analysis run in the remote
-worker. The sole transport is VirtuosoClient.execute_skill, without replay.
+host. Select CIW or SSH transport explicitly; uncertain writes are never replayed.
 """
 from __future__ import annotations
 import argparse
+import base64
 from contextlib import redirect_stdout
 import json
 import re
+import shlex
 import sys
 import time
 import uuid
@@ -38,11 +40,11 @@ def tool(name, description, properties, required=(), *, write=False):
 
 
 TOOLS = [
-    tool('layout_capabilities', 'Inspect the connected remote Layout Diff worker and protocol. Load its startup.il first.', {}),
+    tool('layout_capabilities', 'Inspect the selected remote Layout Diff backend and protocol.', {}),
     tool('layout_diff', 'Semantic layout diff on the remote host. Pairs moves/stretches, reports connectivity and all changed fields. Supply repository/cellview initially, or analysis_id for another page.',
          {**COMMON, **PAGE, 'repository': REPO, 'cellview': CELL,
-          'left': string('Git revision, worktree, or live; default HEAD'),
-          'right': string('Git revision, worktree, or live; default worktree'),
+          'left': string('Git revision, worktree, live, or saved_oa (batch); default HEAD'),
+          'right': string('Git revision, worktree, live, or saved_oa (batch); default worktree'),
           'analysis_id': string(), 'status': {'type': 'string', 'enum': ['added','modified','deleted','modified_net','moved']},
           'layer': string(), 'region': {'type': 'array', 'items': {'type': 'number'}, 'minItems': 4, 'maxItems': 4,
                                       'description': '[x0,y0,x1,y1] in integer snapshot DBU'}, 'records': {'type': 'boolean'}}),
@@ -55,10 +57,12 @@ TOOLS = [
          {**COMMON, 'plan_id': string(), 'generation': {'type': 'integer', 'minimum': 0},
           'decisions': {'type': 'object', 'additionalProperties': {'type': 'string', 'enum': ['base','target','incoming','combined','both']}},
           'mode': {'type': 'string', 'enum': ['preview','accept','write'], 'default': 'preview'},
-          'native_validation': {'type': 'boolean', 'default': True}}, ('plan_id','generation'), write=True),
-    tool('layout_export', 'Capture a selected live cellview into its remote project worktree. Returns semantic counts and exact paths for normal remote git add/commit. save=true explicitly saves the native view first. Existing dirty managed files require the worktree_digest from layout_diff.',
+          'native_validation': {'type': 'boolean', 'default': True},
+          'omission_consent': string('Token returned by an inspected incomplete-output preview; bound to the candidate and Git inputs.')}, ('plan_id','generation'), write=True),
+    tool('layout_export', 'Capture a selected cellview into its remote project worktree. Batch capture reads saved OA; an attached session can read unsaved state. Returns semantic counts and paths for normal git add/commit. save=true requires an attached session. Dirty managed files require worktree_digest from layout_diff. allow_incomplete=true previews audited omissions before digest-bound consent.',
          {**COMMON, 'repository': REPO, 'cellview': CELL, 'save': {'type': 'boolean', 'default': False},
-          'expected_worktree': string()}, ('repository','cellview'), write=True),
+          'expected_worktree': string(), 'allow_incomplete': {'type': 'boolean', 'default': False},
+          'omission_consent': string('Token returned by the incomplete-output preview; acknowledges omitted native content.')}, ('repository','cellview'), write=True),
     tool('layout_result', 'Retrieve a submitted request by its original ID after pending/timeout/unknown transport response. Never resubmits it.',
          COMMON, ('request_id',)),
 ]
@@ -74,7 +78,6 @@ class BridgeProxy:
         self.client, self.profile, self.buffers = client, profile, {}
 
     def execute(self, expression):
-        from virtuoso_bridge.virtuoso.skill_output import parse_sexpr
         if self.client is None:
             from virtuoso_bridge import VirtuosoClient
             self.client = VirtuosoClient.from_env(profile=self.profile)
@@ -85,6 +88,7 @@ class BridgeProxy:
             raise BridgeFailure({'error': str(exc), 'error_type': type(exc).__name__}) from exc
         if str(getattr(result.status, 'value', result.status)) != 'success':
             raise BridgeFailure(result.model_dump(mode='json'))
+        from virtuoso_bridge.virtuoso.skill_output import parse_sexpr
         return parse_sexpr(result.output)
 
     def describe(self):
@@ -95,6 +99,12 @@ class BridgeProxy:
         if caps.get('protocol') != PROTOCOL:
             raise ValueError('Remote Layout Diff protocol is incompatible')
         return {**caps, 'running': bool(value[1])}
+
+    def submit(self, ident, operation, payload):
+        expression = f'ALDAgentSubmit({skill_string(ident)} {skill_string(operation)} {skill_string(payload)})'
+        if len(expression) > 60000:
+            raise ValueError('Request is too large; use smaller decision batches')
+        self.execute(expression)
 
     def result(self, ident, wait_seconds=10):
         if not isinstance(ident, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', ident):
@@ -145,10 +155,7 @@ class BridgeProxy:
             if not caps['running'] or operation not in caps['operations']:
                 raise ValueError('Remote worker is stopped or does not provide this operation')
             payload = json.dumps(arguments, ensure_ascii=True, separators=(',', ':'), allow_nan=False)
-            expression = f'ALDAgentSubmit({skill_string(ident)} {skill_string(operation)} {skill_string(payload)})'
-            if len(expression) > 60000:
-                raise ValueError('Request is too large; use smaller decision batches')
-            self.execute(expression)
+            self.submit(ident, operation, payload)
             return self.result(ident, wait)
         except BridgeFailure as exc:
             return {'request_id': ident, 'status': 'transport_unknown', 'bridge': exc.result,
@@ -159,6 +166,60 @@ class BridgeFailure(RuntimeError):
     def __init__(self, result):
         self.result = result
         super().__init__('Bridge request failed or its outcome is unknown')
+
+
+class SSHProxy(BridgeProxy):
+    """Use Bridge's SSH connection without connecting to or loading a CIW."""
+    def __init__(self, *, python, root, profile=None, runner=None, native_backend='none',
+                 virtuoso='virtuoso', virtuoso_cwd=None, validation_library=None, group_definition_source=None):
+        super().__init__(profile=profile)
+        if not python.startswith('/') or not root.startswith('/'):
+            raise ValueError('SSH Python and state root must be absolute remote paths')
+        self.runner = runner
+        self.command = [python, '-m', 'layoutdiff.agent', '--root', root,
+                        '--native-backend', native_backend, '--virtuoso', virtuoso]
+        for option, value in (('--virtuoso-cwd', virtuoso_cwd), ('--validation-library', validation_library)):
+            if value:
+                self.command.extend([option, value])
+        if group_definition_source:
+            self.command.extend(['--group-definition-source', *group_definition_source])
+
+    def invoke(self, *args):
+        if self.runner is None:
+            from virtuoso_bridge import SSHClient
+            self.client = SSHClient.from_env(profile=self.profile)
+            self.runner = self.client.ssh_runner
+        try:
+            result = self.runner.run_command(' '.join(shlex.quote(s) for s in [*self.command, *args]), timeout=30)
+            if result.returncode:
+                raise RuntimeError(result.stderr.strip() or 'Remote agent runner failed')
+            value = json.loads(result.stdout)
+            if value.get('protocol') != PROTOCOL:
+                raise ValueError('Remote agent protocol is incompatible')
+            return value
+        except Exception as exc:
+            raise BridgeFailure({'error': str(exc), 'error_type': type(exc).__name__}) from exc
+
+    def describe(self):
+        return self.invoke('--describe')
+
+    def submit(self, ident, operation, payload):
+        if len(payload.encode()) > 59000:
+            raise ValueError('Request is too large; use smaller decision batches')
+        value = self.invoke('--operation', operation, '--request-id', ident, '--submit',
+                            '--payload-base64', base64.b64encode(payload.encode()).decode())
+        if value.get('status') == 'error':
+            raise ValueError(value.get('error', 'Remote request rejected'))
+
+    def result(self, ident, wait_seconds=10):
+        if not isinstance(ident, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', ident):
+            raise ValueError('Invalid request ID')
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            value = self.invoke('--result', '--request-id', ident)
+            if value.get('status') not in {'pending', 'running'} or time.monotonic() >= deadline:
+                return value
+            time.sleep(min(.5, max(0, deadline - time.monotonic())))
 
 
 def dispatch(message, proxy):
@@ -194,11 +255,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile')
     parser.add_argument('--env', help='Absolute local Bridge configuration file')
+    parser.add_argument('--transport', choices=('ciw', 'ssh'), default='ciw')
+    parser.add_argument('--remote-python', help='Absolute remote interpreter with Layout Diff installed')
+    parser.add_argument('--remote-root', help='Dedicated remote headless state root outside Git')
+    parser.add_argument('--native-backend', choices=('none', 'batch'), default='none')
+    parser.add_argument('--virtuoso', default='virtuoso')
+    parser.add_argument('--virtuoso-cwd')
+    parser.add_argument('--validation-library')
+    parser.add_argument('--group-definition-source', nargs=3, metavar=('LIB', 'CELL', 'VIEW'))
     args = parser.parse_args()
     if args.env:
         from virtuoso_bridge.env import set_runtime_env_file
         set_runtime_env_file(args.env)
-    proxy = BridgeProxy(profile=args.profile)
+    if args.transport == 'ssh':
+        if not args.remote_python or not args.remote_root:
+            parser.error('SSH transport requires --remote-python and --remote-root')
+        proxy = SSHProxy(python=args.remote_python, root=args.remote_root, profile=args.profile,
+            native_backend=args.native_backend, virtuoso=args.virtuoso, virtuoso_cwd=args.virtuoso_cwd,
+            validation_library=args.validation_library, group_definition_source=args.group_definition_source)
+    else:
+        proxy = BridgeProxy(profile=args.profile)
     for line in sys.stdin:
         message = None
         try:

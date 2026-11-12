@@ -7,7 +7,9 @@ dependencies and preservation limits are described below.
 
 | Operation | Requirements | Layout Diff GUI worker/supervisor |
 | --- | --- | --- |
-| `capture`, `restore` | Python package, Virtuoso, bridge daemon/connection, accessible libraries/PDK | Not required |
+| `capture`, `restore`, `record` with `--native-backend bridge` (default) | Python package, Virtuoso, bridge daemon/connection, accessible libraries/PDK | Not required |
+| `capture`, `restore`, `record` with `--native-backend batch` | Python package on the OA host, configured Virtuoso executable and libraries/PDK | Not required; no bridge daemon or display |
+| `agent` | Python package, Git, request JSON; optional native batch backend | Not required |
 | `encode-v2`, `decode-v2`, `diff`, `apply`, `diff-stream`, `apply-stream` | Python package and files | Not required; no bridge needed |
 | `gui-serve`, `gui-stop`, `gui-clean`, interactive review/commit tools | Installed plugin and shared bridge; GUI operations use its worker | Required for interactive workflow |
 
@@ -15,11 +17,14 @@ The small bridge daemon is distinct from the Layout Diff runtime. Native CLI
 commands instantiate `VirtuosoAdapter` directly, load `virtuoso/skill/reader.il`
 as needed, and call the database through the bridge. They do not queue work to
 the GUI worker. A one-shot hierarchy fingerprint helper may run on the host;
-it is not a persistent Layout Diff service. A direct OA reader or batch-Virtuoso
-launcher is not implemented, so native CLI operations do not eliminate Virtuoso
-or its bridge requirement.
+it is not a persistent Layout Diff service. The batch backend starts a fresh
+`virtuoso -nograph -nocdsinit -restore` process for each native job. It clears
+`DISPLAY` and `CDS_NOGRAPH_DISPLAY`, loads database helpers without the GUI
+plugin or Bridge monitor, and captures saved OA state. It still needs Virtuoso,
+its license and the configured libraries/PDK; it cannot see another session's
+unsaved edits. The environment must already be configured before invocation.
 
-Native commands use `VirtuosoClient.from_env()` and the Bridge-resolved profile.
+The default bridge backend uses `VirtuosoClient.from_env()` and the Bridge-resolved profile.
 The Layout Diff CLI has no Bridge `--profile`/`--env` options; use the active
 environment's profile binding or pass a selected client through the Python API.
 See [connection setup](../runtime/BRIDGE.md#connection-paths).
@@ -31,17 +36,35 @@ python -m layoutdiff capture LIB CELL snapshot.layout --format v2
 python -m layoutdiff restore snapshot.layout replay_cell --library TEST_LIB --allow-library TEST_LIB
 python -m layoutdiff decode-v2 snapshot.layout expanded.json
 python -m layoutdiff encode-v2 expanded.json encoded.layout
+python -m layoutdiff capture LIB CELL snapshot.layout --format v2 \
+  --native-backend batch --virtuoso-cwd /projects/example
+python -m layoutdiff restore snapshot.layout replay_cell --library TEST_LIB --allow-library TEST_LIB \
+  --native-backend batch --virtuoso-cwd /projects/example
 ```
 
 Restore only creates a fresh destination; it refuses an existing cellview.
 Its destination technology must match. Referenced masters and custom native
-group definitions must be available. The current CLI does not expose the
-adapter's `group_definition_source` argument, so source-defined custom groups
-may require first reading their source layout in the same Virtuoso session.
+group definitions must be available. Use `--group-definition-source LIB CELL VIEW`
+to read persisted custom definitions from a source view before reconstruction.
+`--virtuoso` selects the batch executable; `--virtuoso-cwd` selects the working
+directory containing `cds.lib`. A restore creates only a fresh destination and
+verifies its native readback. Batch jobs retain scripts, capture files and logs
+under the command's artifacts directory; a failed or timed-out job reports that
+location and is not automatically retried.
 
 Standalone capture uses `/tmp/ald_*` transport files and a local `artifacts/`
 directory. It does not get the GUI runtime's window/lease-based scratch cleanup.
 File-only diff/apply reconstructs serialized data, not a native OA cellview.
+
+## Semantic Git operations without a GUI
+
+`python -m layoutdiff agent` and `python -m layoutdiff.agent` are equivalent
+headless entry points. See the [agent guide](../agent/README.md#headless-cli-and-ssh-transport)
+for request JSON, persisted pagination and optional native validation. Python
+performs semantic diff/merge; system Git resolves revisions and supplies blobs.
+Use ordinary `git add`, `git commit` and `git log` for staging, commits and
+history. The CLI `commit` command still belongs to the standalone legacy history;
+it is not a system-Git wrapper.
 
 ## What unsupported-content preservation currently means
 
@@ -51,6 +74,7 @@ File-only diff/apply reconstructs serialized data, not a native OA cellview.
 | `capture --format v2` | Supported records | Strict capture rejects unsupported content, with the complete report |
 | v1 to v2 encoding / decoding / exact diff / patch replay | Unknown logical record kinds and fields already present in the input | Unknown snapshot schemas/envelope fields remain rejected; no OA semantics are inferred |
 | Confirmed incomplete GUI Git commit | Supported snapshot plus `omissions.json` and `omissions.jsonl` | Diagnostic records are audit data, not replay input |
+| Consented incomplete agent export/merge write | Supported snapshot plus hash-bound omission audit and complete report | Consent binds the candidate and Git inputs; system Git staging/commit remains separate |
 | Native restore | Supported snapshot | Unsupported records in the replay input are rejected |
 
 The omission report contains each original normalized record, its canonical

@@ -40,6 +40,40 @@ library; verify source modification state and native readback separately. If the
 configured Bridge/CIW is unavailable, report file-only remote checks separately
 from unverified SKILL/native behavior. See the [agent guide](../agent/README.md).
 
+## Headless and legacy Git checks
+
+`tests/test_git_compat.py` covers legacy administrative-path parsing, gitfiles,
+revision validation and clone-based merge publication with source hooks.
+`tests/test_headless.py` covers persisted/pinned diff pages, corrupt inputs,
+display-free subprocess boundaries, missing completion, timeouts and audited
+incomplete export. The SSH proxy tests execute the real host CLI and recover a
+lost asynchronous submission reply without replaying it.
+
+Run the dependency-free integration driver against both the system executable
+and a real Git 1.8.3.1 build; a simulated shim does not establish compatibility:
+
+```sh
+python scripts/headless_regression.py
+LAYOUTDIFF_GIT=/path/to/git-1.8.3.1 python scripts/headless_regression.py
+```
+
+For display-free native verification, use an existing dedicated writable test
+library, its configured working directory and a valid drawing layer:
+
+```sh
+python scripts/headless_native_regression.py --cwd /projects/test \
+  --library TEST_LIB --layer M1 --output /tmp/headless-native-evidence
+```
+
+The driver creates unique synthetic views, captures/exports them, uses ordinary
+Git commits and a real merge, resolves through the headless CLI with native batch
+readback, and verifies that the original synthetic source remains unchanged.
+It removes only its created views and retains native job scripts/logs in the
+specified new evidence directory. It does not contact a CIW or GUI worker.
+Also exercise the CLI `capture` and `restore` batch entry points when changing
+argument routing. PDK-specific groups, vias and ROD features require their own
+native fixtures; a simple rectangle roundtrip does not validate those features.
+
 ## Graphical merge checks
 
 `test_merge.py`, `test_merge_relationships.py`, `test_merge_index.py` and

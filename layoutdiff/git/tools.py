@@ -1,11 +1,11 @@
 """Explicit, repository-local Git integration; never stage or commit user work."""
 import json
 import shlex
-import subprocess
 import sys
 from pathlib import Path
 from layoutdiff.data.core import SCHEMA, digest, validate
 from layoutdiff.data.history import read_json, atomic_json
+from layoutdiff.git.compat import git as run_git
 
 
 def textconv(value):
@@ -26,7 +26,7 @@ def textconv(value):
 
 
 def git(repo, *args):
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=True)
+    result = run_git(repo, *args)
     return result.stdout
 
 

@@ -4,37 +4,23 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import tempfile
 import uuid
 from collections import Counter
 from layoutdiff.data.core import digest, diff, validate
 from layoutdiff.data.history import read_json
 from layoutdiff.git.tools import textconv
-import difflib
-
-
-def git(repo, *args, env=None, data=None, check=True, output=None):
-    process_env = os.environ.copy()
-    process_env["GIT_OPTIONAL_LOCKS"] = "0"
-    # The GUI target must never be redirected by inherited Git environment.
-    for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
-        process_env.pop(key, None)
-    process_env.update(env or {})
-    process_env["GIT_LITERAL_PATHSPECS"] = "1"
-    stream = open(output, "wb") if output else None
-    try:
-        result = subprocess.run(["git", "-C", str(repo), *args], input=data,
-                                stdout=stream or subprocess.PIPE, stderr=subprocess.PIPE, env=process_env, timeout=90)
-    finally:
-        if stream:
-            stream.close()
-    if check and result.returncode:
-        raise RuntimeError(result.stderr.decode(errors="replace").strip() or "Git command failed")
-    return result
+from layoutdiff.git.compat import git, git_path
 
 
 def discover(directory):
+    if not isinstance(directory, (str, os.PathLike)) or not directory:
+        return None
+    try:
+        if not Path(directory).is_dir():
+            return None
+    except (OSError, ValueError):
+        return None
     result = git(directory, "rev-parse", "--show-toplevel", check=False)
     return Path(result.stdout.decode().strip()).resolve() if result.returncode == 0 else None
 
@@ -44,9 +30,7 @@ def revision(repo):
     result = git(repo, "rev-parse", "--verify", "HEAD", check=False)
     head = result.stdout.decode().strip() if result.returncode == 0 else None
     for marker in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"):
-        path = Path(git(repo, "rev-parse", "--git-path", marker).stdout.decode().strip())
-        if not path.is_absolute():
-            path = repo / path
+        path = git_path(repo, marker)
         if path.exists():
             if marker == 'MERGE_HEAD':
                 raise ValueError('An active Git merge is in progress. Open Layout Diff > Merge to resolve layouts, then finish the merge in your Git tool before Save & Commit')
@@ -282,9 +266,7 @@ def commit(preview, message, *, scratch=None, registry=None):
                 raise ValueError('Prepared omission report changed after preview')
     for name in files:
         ensure_clean(repo, name)
-    index = Path(git(repo, "rev-parse", "--git-path", "index").stdout.decode().strip())
-    if not index.is_absolute():
-        index = repo / index
+    index = git_path(repo, 'index')
     lock = index.with_name("index.lock")
     index_staging = index.with_name("index.ald-" + uuid.uuid4().hex)
     token = f"layoutdiff:{os.getpid()}:{uuid.uuid4().hex}"

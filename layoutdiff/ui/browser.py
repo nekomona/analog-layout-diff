@@ -192,13 +192,14 @@ class RepositoryBrowser:
             return [], []
         sha = self.refs[int(ref_index)][1]
         raw = git(self.repo, "log", "--graph", "--topo-order", f"--max-count={int(limit)}",
-                  "--format=%x1e%H%x1f%P%x1f%an%x1f%aI%x1f%s%x1f%D", sha).stdout.decode("utf-8", errors="replace")
+                  "--format=%x1e%H%x1f%P%x1f%an%x1f%ai%x1f%s%x1f%d", sha).stdout.decode("utf-8", errors="replace")
         rows, ids = [], []
         for line in raw.split("\n"):
             if "\x1e" not in line:
                 continue
             graph, record = line.split("\x1e", 1)
             oid, parents, author, date, message, refs = record.split("\x1f", 5)
+            refs = refs.strip().removeprefix('(').removesuffix(')')
             self.commits[oid] = dict(id=oid, parents=parents.split(), message=message)
             ids.append(oid)
             rows.append([graph + oid[:10], message, author, date[:19].replace("T", " "), refs])

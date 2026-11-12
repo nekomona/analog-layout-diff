@@ -14,6 +14,7 @@ from urllib.parse import quote, unquote
 from layoutdiff.data.core import digest, empty_snapshot, validate
 from layoutdiff.git.commit import git
 from layoutdiff.data.storage import Snapshot, from_snapshot, strict_json, FILES
+from layoutdiff.git.compat import iso_date
 
 
 def check_identity(identity):
@@ -152,10 +153,10 @@ class GitSnapshots:
 
     def metadata(self, revision):
         if revision not in self._metadata:
-            raw = git(self.repo, "show", "-s", "--format=%H%x00%P%x00%an%x00%aI%x00%B", revision).stdout
+            raw = git(self.repo, "show", "-s", "--format=%H%x00%P%x00%an%x00%ai%x00%B", revision).stdout
             sha, parents, author, date, message = raw.decode("utf-8", errors="replace").split("\0", 4)
             self._metadata[revision] = {"sha": sha, "parents": parents.split(), "author": author,
-                                        "date": date, "message": message.rstrip("\n")}
+                                        "date": iso_date(date), "message": message.rstrip("\n")}
         return self._metadata[revision]
 
     def omissions(self, revision):
@@ -182,14 +183,14 @@ class GitSnapshots:
         if not self.head:
             return []
         if self._log is None:
-            raw = git(self.repo, "log", "--first-parent", "-z", "--format=%H%x00%P%x00%an%x00%aI%x00%B", self.head, "--",
+            raw = git(self.repo, "log", "--first-parent", "-z", "--format=%H%x00%P%x00%an%x00%ai%x00%B", self.head, "--",
                       self.path, self.v2, self.legacy + "/latest.layout.json").stdout.decode("utf-8", errors="replace").split("\0")
             self._log = []
             for i in range(0, len(raw) - 1, 5):
                 sha, parents, author, date, message = raw[i:i + 5]
                 self._log.append(sha)
                 self._metadata[sha] = {"sha": sha, "parents": parents.split(), "author": author,
-                    "date": date, "message": message.rstrip("\n")}
+                    "date": iso_date(date), "message": message.rstrip("\n")}
         return self._log
 
 

@@ -4,6 +4,26 @@
 repository-local semantic diff tooling. Git supplies commit IDs, ancestry,
 branches, tags and author metadata. Derived caches have no commit authority.
 
+## Git compatibility
+
+Git 1.8.3.1 and later are supported without a shell shim. The shared runner uses
+the subprocess working directory instead of `git -C`. Administrative index and
+merge paths use `--git-path` when supported and fall back to `--git-dir` without
+assuming `.git` is a directory. Revision resolution validates inputs and full
+commit IDs without `--end-of-options`; metadata uses `%ai` and normalizes its
+timezone to ISO format. `LAYOUTDIFF_GIT` can select a specific Git executable.
+
+Isolated repository merges use linked worktrees when both add and remove are
+available. Older Git uses a local clone with independent objects, index and
+merge state. The transaction retains its backend across restarts, protects
+pinned input commits, refreshes source hook/identity/signing settings before
+committing, and transfers completed commits back before explicit publication.
+Ordinary-file choices use path-specific checkout, with explicit deletion handling.
+
+Agents use the [headless semantic interface](../agent/README.md#headless-cli-and-ssh-transport)
+alongside ordinary system Git. Capture and native readback are separate native
+operations; stored-snapshot comparison and logical merge need no Virtuoso.
+
 ## Snapshot storage
 
 Each cellview is stored at `layouts/<library>/<cell>/<view>.layout/`, with
@@ -59,7 +79,8 @@ the entered order. Each incoming branch is integrated with a separate two-parent
 commit; already-integrated ancestors are skipped. A unique common ancestor is
 required. Unrelated histories and multiple merge bases are refused.
 
-The transaction creates a detached linked worktree in system temporary storage.
+The transaction creates a detached isolated checkout in system temporary storage:
+a linked worktree on modern Git, or an independent local clone on legacy Git.
 Git merges ordinary paths there. Every affected managed cell, including changes
 on only one side, is reconstructed and validated through the native merge editor.
 Managed snapshot bundles are regenerated from those decisions. Git's textual
@@ -81,7 +102,7 @@ outside a runtime session's disposable TMPDIR. An internal Git ref protects
 prepared commits. Resume recovers interrupted preparation, commit and publication
 when their pinned state can be verified. Unexpected external changes stop the
 transaction for inspection. Completed or explicitly cancelled transactions remove
-their linked worktrees and internal refs; decision journals remain as local audits.
+their isolated checkouts and internal refs; decision journals remain as local audits.
 
 Incomplete source snapshots retain their diagnostic reports in the merged bundle.
 Commit requires two loss confirmations, including after manual edits introduce

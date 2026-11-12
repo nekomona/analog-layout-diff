@@ -3,6 +3,8 @@ from collections import OrderedDict
 from pathlib import Path
 import os
 import re
+import shutil
+import hashlib
 import uuid
 
 from layoutdiff.agent import OPERATIONS, PROTOCOL
@@ -13,10 +15,10 @@ from layoutdiff.comparison.merge_index import MergeIndex
 from layoutdiff.data.core import digest, encoded
 from layoutdiff.data.history import atomic_json, read_json
 from layoutdiff.data.merge_session import MergeSession
-from layoutdiff.data.storage import from_snapshot, strict_json
+from layoutdiff.data.storage import Snapshot, from_snapshot, strict_json
 from layoutdiff.git.active_merge import active_merge, cell_paths, index_entries, parsed_entries
 from layoutdiff.git.commit import git
-from layoutdiff.git.store import check_identity
+from layoutdiff.git.store import check_identity, blob, snapshot_directory
 
 ID = re.compile(r'[A-Za-z0-9_-]{1,64}\Z')
 PAGE_BYTES = 2048  # ASCII pages remain bounded after SKILL/MCP escaping.
@@ -47,17 +49,19 @@ def page_args(payload):
 
 class AgentService:
     def __init__(self, root, *, adapter=None, source_state=None, save_source=None, native_validate=None,
-                 publish_capabilities=True):
+                 publish_capabilities=True, durable_diffs=False):
         self.root = Path(root).resolve()
         self.requests = self.root / 'requests'
         self.requests.mkdir(parents=True, exist_ok=True)
         self.adapter, self.source_state = adapter, source_state
         self.save_source, self.native_validate = save_source, native_validate
+        self.durable_diffs = durable_diffs
         self.diffs = OrderedDict()
         self.plans = OrderedDict()
         self.capabilities = {
             'protocol': PROTOCOL, 'operations': list(OPERATIONS), 'runtime_root': str(self.root),
             'native_capture': adapter is not None, 'native_validation': native_validate is not None,
+            'capture_state': getattr(adapter, 'capture_state', 'session') if adapter is not None else None,
             'page_bytes': PAGE_BYTES, 'worker_pid': os.getpid(),
             'repository_paths': 'absolute paths on the Virtuoso host',
             'index_policy': 'writes leave Git index, commits and branch unchanged'}
@@ -131,17 +135,20 @@ class AgentService:
         check_identity(value)
         return value
 
-    def _capture(self, identity, save=False):
+    def _capture(self, identity, save=False, *, allow_incomplete=False):
         if self.adapter is None:
-            raise ValueError('Native capture requires the connected Virtuoso worker')
+            raise ValueError('Native capture requires an attached Virtuoso adapter or the batch backend')
         if save:
             if self.save_source is None:
                 raise ValueError('Native save is unavailable')
             self.save_source(identity)
         before = self.source_state(identity) if self.source_state else None
-        store = self.adapter.capture_store(*identity, temporary=True)
+        options = {'allow_unsupported': True} if allow_incomplete else {}
+        store = self.adapter.capture_store(*identity, temporary=True, **options)
         try:
             value = store.materialize()
+            audit = getattr(store, 'omissions', None)
+            report = store.omission_report.read_bytes() if audit else None
         finally:
             store.dispose()
         after = self.source_state(identity) if self.source_state else None
@@ -151,15 +158,22 @@ class AgentService:
         for r in value['objects'].values():
             if r['kind'] == 'dependency' and (r.get('dirty') or r.get('fingerprint', {}).get('status') != 'ok'):
                 warnings.append({'master': r.get('name'), 'dirty': r.get('dirty'), 'fingerprint': r.get('fingerprint')})
-        return value, {'source_state': after, 'dependency_warnings': warnings}
+        result = {'source_state': after, 'dependency_warnings': warnings}
+        if getattr(self.adapter, 'capture_state', None):
+            result['capture_state'] = self.adapter.capture_state
+        if audit:
+            result.update(omissions=audit, omission_report=report)
+        return value, result
 
     def _read(self, repo, identity, source):
         if source == 'worktree':
             value, audit = repos.worktree_snapshot(repo, identity)
             return value, {'source': source, 'omissions': audit}
-        if source == 'live':
+        if source in {'live', 'saved_oa'}:
+            if source == 'saved_oa' and getattr(self.adapter, 'capture_state', None) != 'saved_oa':
+                raise ValueError('saved_oa requires the native batch backend')
             value, meta = self._capture(identity)
-            return value, {'source': source, **meta}
+            return value, {'source': meta.get('capture_state', source), **meta}
         sha = repos.commit_id(repo, source)
         value, audit = repos.revision_snapshot(repo, identity, sha)
         return value, {'source': source, 'commit': sha, 'omissions': audit}
@@ -174,6 +188,11 @@ class AgentService:
             a.close(); b.close()
         metadata = {**metadata, 'analysis_id': ident, 'digests': {'before': digest(before), 'after': digest(after)},
                     'inputs': str(folder), 'exact_operations': str(index.operations_path)}
+        if self.durable_diffs:
+            exact = folder / 'operations.jsonl'
+            shutil.copyfile(index.operations_path, exact)
+            metadata['exact_operations'] = str(exact)
+            atomic_json(folder / 'analysis.json', metadata)
         self.diffs[ident] = (index, metadata)
         while len(self.diffs) > 4:
             _, (old, _) = self.diffs.popitem(last=False)
@@ -193,6 +212,22 @@ class AgentService:
             ident = self._diff(before, after, {'repository': str(repo), 'cellview': identity,
                 'left': left, 'right': right, 'worktree_digest': digest(guard)})
         identifier(ident)
+        if ident not in self.diffs and self.durable_diffs:
+            folder = self.root / 'diff-inputs' / ident
+            if (folder / 'analysis.json').exists():
+                metadata = read_json(folder / 'analysis.json')
+                a, b = Snapshot(folder / 'before'), Snapshot(folder / 'after')
+                try:
+                    a.wire(); b.wire()
+                    if metadata['digests'] != {'before': a.digest, 'after': b.digest}:
+                        raise ValueError('Pinned diff inputs changed')
+                    index = ChangeIndex(a, b, backend='auto')
+                finally:
+                    a.close(); b.close()
+                self.diffs[ident] = (index, metadata)
+                while len(self.diffs) > 4:
+                    _, (old, _) = self.diffs.popitem(last=False)
+                    old.close()
         if ident not in self.diffs:
             raise ValueError('Analysis expired; request a new diff using its pinned inputs')
         index, metadata = self.diffs[ident]
@@ -217,14 +252,22 @@ class AgentService:
             session, _ = self._load_session(ident)
             repos.check_guard(repo, identity, guard)
             return ident, session
-        values, audits = [], []
+        values, audits, reports = [], [], {}
         for sha in refs.values():
             value, audit = repos.revision_snapshot(repo, identity, sha)
             values.append(value)
             if audit:
                 audits.append(audit)
+                report = blob(repo, sha, snapshot_directory(identity) + '/omissions.jsonl')
+                if report is None or hashlib.sha256(report).hexdigest() != audit['reportSha256']:
+                    raise ValueError('Omission report missing or corrupt')
+                reports[audit['reportSha256']] = report
         metadata['omissions'] = audits
         session = MergeSession.create(path, *values, metadata=metadata)
+        if reports:
+            (path / 'omissions').mkdir()
+            for sha, raw in reports.items():
+                (path / 'omissions' / (sha + '.jsonl')).write_bytes(raw)
         self.plans[ident] = (session, None)
         session, _ = self._load_session(ident)
         repos.check_guard(repo, identity, guard)
@@ -274,6 +317,28 @@ class AgentService:
             'warnings': session.plan.warnings, 'omissions': session.metadata['omissions'],
             'units': items, 'total': total, 'offset': offset,
             'next_offset': offset + len(items) if not unit_id and offset + len(items) < total else None}
+
+    def _omission_reports(self, session):
+        reports = {}
+        for audit in session.metadata['omissions']:
+            sha = audit['reportSha256']
+            if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{64}', sha):
+                raise ValueError('Invalid omission report hash')
+            path = session.path / 'omissions' / (sha + '.jsonl')
+            if not path.exists():
+                # Older plans kept audit metadata only. Recover evidence from
+                # their immutable input commits rather than discarding decisions.
+                repo, identity = Path(session.metadata['repository']), session.metadata['identity']
+                for revision in session.metadata['refs'].values():
+                    raw = blob(repo, revision, snapshot_directory(identity) + '/omissions.jsonl')
+                    if raw is not None and hashlib.sha256(raw).hexdigest() == sha:
+                        path.parent.mkdir(exist_ok=True)
+                        path.write_bytes(raw)
+                        break
+                else:
+                    raise ValueError('Omission report missing or corrupt')
+            reports[sha] = path.read_bytes()
+        return reports
 
     def merge_plan(self, p):
         keys(p, QUERY_KEYS | {'repository', 'cellview', 'base', 'ours', 'theirs', 'plan_id'})
@@ -336,7 +401,7 @@ class AgentService:
         return result
 
     def merge_apply(self, p):
-        keys(p, {'plan_id', 'generation', 'decisions', 'mode', 'native_validation'})
+        keys(p, {'plan_id', 'generation', 'decisions', 'mode', 'native_validation', 'omission_consent'})
         ident = identifier(p.get('plan_id'))
         session, _ = self._load_session(ident)
         generation = p.get('generation')
@@ -356,19 +421,30 @@ class AgentService:
         if mode == 'write':
             if unresolved:
                 raise ValueError('Resolve all merge decisions before writing')
+            audit, report = None, None
             if session.metadata['omissions']:
-                raise ValueError('Incomplete snapshots require the graphical omission-preservation workflow')
+                from layoutdiff.eda.virtuoso.omissions import inherited
+                reports = self._omission_reports(session)
+                audit, report = inherited(candidate, session.metadata['omissions'], reports)
+                if not candidate['objects']:
+                    raise ValueError('Deleting an incomplete cell requires retaining its omission audit')
+            token = repos.omission_token(repo, identity, candidate, session.metadata['guard'], audit)
+            if token and p.get('omission_consent') != token:
+                from layoutdiff.eda.virtuoso.omissions import warning
+                return {**result, 'written': False, 'omission_consent_required': token,
+                        'omissions': audit, 'omission_warning': warning(audit)}
             if p.get('native_validation', True):
                 if self.native_validate is None:
                     raise ValueError('Native validation requires Virtuoso; explicitly set native_validation=false for logical-only output')
                 result['native'] = self.native_validate(candidate)
                 result['validation'] = 'native_readback'
-            # Keep the decision journal locked through validation of the final state and publication.
+            # Recheck the validated candidate under the journal lock before publication.
             with session.lock(generation):
                 if digest(session.preview_many(decisions, generation)) != result['snapshot_digest']:
                     raise ValueError('Merge preview changed')
                 result.update(repos.write_snapshot(repo, identity, candidate, session.metadata['guard'],
-                    self.root / 'writes' / uuid.uuid4().hex))
+                    self.root / 'writes' / uuid.uuid4().hex, audit=audit, report=report,
+                    omission_consent=p.get('omission_consent')))
                 atomic_json(session.path / 'written.json', result)
         elif mode == 'accept':
             session.decide_many(decisions, generation, validated_digest=result['snapshot_digest'])
@@ -376,9 +452,11 @@ class AgentService:
         return result
 
     def export(self, p):
-        keys(p, {'repository', 'cellview', 'save', 'expected_worktree'})
+        keys(p, {'repository', 'cellview', 'save', 'expected_worktree', 'allow_incomplete', 'omission_consent'})
         if type(p.get('save', False)) is not bool:
             raise ValueError('save must be a boolean')
+        if type(p.get('allow_incomplete', False)) is not bool:
+            raise ValueError('allow_incomplete must be a boolean')
         repo, identity = repos.repository(p.get('repository', '')), self._identity(p)
         guard = repos.guard(repo, identity)
         if any(stage for _, _, _, stage in parsed_entries(index_entries(repo, cell_paths(identity)))):
@@ -387,10 +465,16 @@ class AgentService:
         if dirty and p.get('expected_worktree') != digest(guard):
             raise ValueError('Managed paths have local changes; inspect layout_diff and supply its worktree_digest')
         before, audit = repos.worktree_snapshot(repo, identity)
-        if audit:
-            raise ValueError('An omission audit requires the graphical preservation workflow')
-        value, native = self._capture(identity, p.get('save', False))
+        value, native = self._capture(identity, p.get('save', False), allow_incomplete=p.get('allow_incomplete', False))
+        audit = native.get('omissions')
+        report = native.pop('omission_report', None)
         ident = self._diff(before, value, {'repository': str(repo), 'cellview': identity})
-        result = repos.write_snapshot(repo, identity, value, guard, self.root / 'writes' / uuid.uuid4().hex)
+        token = repos.omission_token(repo, identity, value, guard, audit)
+        if token and p.get('omission_consent') != token:
+            from layoutdiff.eda.virtuoso.omissions import warning
+            return {**native, 'analysis_id': ident, 'written': False, 'omission_consent_required': token,
+                    'omission_warning': warning(audit) or 'Replace the current incomplete checkpoint and its omission audit.'}
+        result = repos.write_snapshot(repo, identity, value, guard, self.root / 'writes' / uuid.uuid4().hex,
+                                      audit=audit, report=report, omission_consent=p.get('omission_consent'))
         return {**result, **native, 'analysis_id': ident, 'counts': dict(self.diffs[ident][0].totals),
                 'worktree_digest': digest(repos.guard(repo, identity))}

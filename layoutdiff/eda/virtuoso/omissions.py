@@ -6,6 +6,7 @@ groups. Re-resolving capture tokens repairs content-addressed links after that
 change. Malformed storage and essential cell metadata still fail closed.
 """
 from collections import Counter
+import hashlib
 import json
 from layoutdiff.data.core import encoded, digest
 from layoutdiff.data.storage import spool, write_records, NAMED
@@ -16,6 +17,24 @@ from layoutdiff.data.streaming import file_digest
 
 AUDIT = 'omissions.json'
 DETAILS = 'omissions.jsonl'
+
+
+def inherited(snapshot, audits, reports):
+    """Retain complete diagnostic evidence while binding it to a merged snapshot."""
+    unique = {a['reportSha256']: a for a in audits}
+    audits = list(unique.values())
+    raw, counts = [], Counter()
+    for audit in audits:
+        report = reports[audit['reportSha256']]
+        if hashlib.sha256(report).hexdigest() != audit['reportSha256']:
+            raise ValueError('Omission report missing or corrupt')
+        raw.append(report); counts.update(audit['counts'])
+    data = b''.join(raw)
+    audit = dict(schema='analog-layout-diff/omissions/1', sourceSha256=digest(audits),
+        snapshotSha256=digest(snapshot), omitted=sum(a['omitted'] for a in audits),
+        detached=sum(a['detached'] for a in audits), counts=dict(counts),
+        reportSha256=hashlib.sha256(data).hexdigest(), inherited=audits)
+    return audit, data
 
 
 def warning(audit):

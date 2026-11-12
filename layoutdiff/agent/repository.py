@@ -11,6 +11,7 @@ from layoutdiff.data.storage import FILES, Snapshot, from_snapshot, strict_json
 from layoutdiff.git.commit import git, discover, json_bytes
 from layoutdiff.git.active_merge import cell_paths, git_path, index_entries, safe_file, work_hashes
 from layoutdiff.git.store import GitSnapshots, snapshot_path, snapshot_directory
+from layoutdiff.git.compat import resolve
 
 
 def repository(path):
@@ -21,15 +22,13 @@ def repository(path):
 
 
 def commit_id(repo, ref):
-    if not isinstance(ref, str) or not ref or '\0' in ref:
-        raise ValueError("Expected a Git revision")
-    result = git(repo, 'rev-parse', '--verify', '--end-of-options', ref + '^{commit}', check=False)
-    if result.returncode:
+    result = resolve(repo, ref, missing=True)
+    if result is None:
         if ref == 'HEAD' and git(repo, 'symbolic-ref', '--quiet', 'HEAD', check=False).returncode == 0:
             if not git(repo, 'rev-parse', '--verify', 'HEAD', check=False).stdout:
                 return None
         raise ValueError("Cannot resolve Git revision: " + ref)
-    return result.stdout.decode().strip()
+    return result
 
 
 def paths(identity):
@@ -103,7 +102,14 @@ def locked_index(repo):
             lock.unlink()
 
 
-def write_snapshot(repo, identity, snapshot, expected, journal):
+def omission_token(repo, identity, snapshot, expected, audit=None):
+    directory = repo / snapshot_directory(identity)
+    if audit or any((directory / name).exists() for name in ('omissions.json', 'omissions.jsonl')):
+        return digest({'snapshot': digest(snapshot), 'audit': audit, 'guard': expected})
+    return None
+
+
+def write_snapshot(repo, identity, snapshot, expected, journal, *, audit=None, report=None, omission_consent=None):
     """Install only a selected complete snapshot, retaining a recovery journal."""
     validate(snapshot)
     from layoutdiff.eda.virtuoso.support import coverage
@@ -112,18 +118,25 @@ def write_snapshot(repo, identity, snapshot, expected, journal):
         raise ValueError('Snapshot has reconstruction blockers: ' + '; '.join(issues[:10]))
     check_guard(repo, identity, expected)
     directory, legacy = snapshot_directory(identity), snapshot_path(identity)
-    for name in ('omissions.json', 'omissions.jsonl'):
-        if (repo / directory / name).exists():
-            raise ValueError('An omission audit requires the graphical preservation workflow')
+    token = omission_token(repo, identity, snapshot, expected, audit)
+    if token and not snapshot['objects']:
+        raise ValueError('Deleting an incomplete cell requires retaining its omission audit')
+    if token and omission_consent != token:
+        raise ValueError('Incomplete snapshots require consent bound to the current preview')
+    if audit:
+        if (not snapshot['objects'] or audit['snapshotSha256'] != digest(snapshot) or
+                report is None or hashlib.sha256(report).hexdigest() != audit['reportSha256']):
+            raise ValueError('Invalid omission audit or report; incomplete cell deletion is refused')
     existing = repo / directory
-    if existing.exists() and any(p.name not in FILES or not p.is_file() or p.is_symlink() for p in existing.iterdir()):
+    if existing.exists() and any(p.name not in (*FILES, 'omissions.json', 'omissions.jsonl') or
+                                not p.is_file() or p.is_symlink() for p in existing.iterdir()):
         raise ValueError('Unexpected files in managed snapshot bundle')
     journal = Path(journal)
     journal.mkdir(parents=True, exist_ok=False)
     desired = {}
     if not snapshot['objects']:
         desired = {name: None for name in cell_paths(identity) if (repo / name).exists()}
-    elif (repo / legacy).exists() and not existing.exists():
+    elif (repo / legacy).exists() and not existing.exists() and not audit:
         desired[legacy] = json_bytes(snapshot)
     else:
         store = from_snapshot(snapshot, journal / 'candidate')
@@ -131,6 +144,9 @@ def write_snapshot(repo, identity, snapshot, expected, journal):
         desired.update({directory + '/' + name: (journal / 'candidate' / name).read_bytes() for name in FILES})
         if (repo / legacy).exists():
             desired[legacy] = None
+    for name, data in (('omissions.json', json_bytes(audit) if audit else None), ('omissions.jsonl', report if audit else None)):
+        if data is not None or (repo / directory / name).exists():
+            desired[directory + '/' + name] = data
     attr = 'layouts/.gitattributes'
     previous = (repo / attr).read_bytes() if (repo / attr).exists() else b''
     rules = [b'*.layout.json -merge', b'*.jsonl -merge', b'**/*.layout/manifest.json -merge']
