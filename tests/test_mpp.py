@@ -31,6 +31,25 @@ def test_recipe_replay_uses_native_rod_and_reuses_members():
     assert text.index('dbCreateNet(')<text.index('rodCreatePath(')
 
 
+def test_mpp_master_and_generated_subshape_can_share_a_figgroup():
+    raw = records()
+    raw.append(dict(kind='figGroup', name='g', ordered=True, type='none',
+                    origin=[0, 0], orient='R0', memberCount=2, props=[]))
+    raw[2].update(group='g', groupOrder=0)
+    raw[3].update(group='g', groupOrder=1)
+    s = canonicalize(raw)
+    assert not coverage(s)
+    code = [c for c in render(s) if 'dbAddFigToFigGroup' in c]
+    assert len(code) == 2
+    # The master must be added first, its implicit subShape membership detached,
+    # then the recorded subShape is added at its captured position.
+    assert code[0].index('dbAddFigToFigGroup') < code[0].index('dbRemoveFigFromFigGroup')
+    assert 'aldMPPs["ring"]~>subShapes' in code[0]
+    assert 'sub~>figGroup==groups["g"]' in code[0]
+    assert 'dbRemoveFigFromFigGroup' not in code[1]
+    assert 'figures["rect:' in code[1]
+
+
 def test_exact_patch_preserves_recipe_and_generated_members(tmp_path):
     old=canonicalize(records())
     records2=records(); records2[2]['mpp']['parts'][0]['space']=300

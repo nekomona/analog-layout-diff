@@ -80,6 +80,11 @@ def via_default_projection(snapshot, defaults, *, mpp_connectivity=False, mpp_ca
                 nets[k].add(r.get('net'))
                 if r.get('pin'): pins.add(k)
         for r in records.values():
+            if r.get('mppOwner') and 'groupOrder' in r:
+                # ROD assigns generated subShape positions; only membership is
+                # part of the replay contract, not their order in an ordered group.
+                del r['groupOrder']; normalized += 1
+        for r in records.values():
             if not r.get('mpp'): continue
             m = r['mpp']
             # rodCreatePath numbers subparts by creation order. These generated

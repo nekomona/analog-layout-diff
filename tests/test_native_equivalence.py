@@ -75,6 +75,20 @@ def test_non_unit_default_is_proven_from_technology_and_other_params_stay_exact(
     assert projection([via([['cutWidth', .2]])], defaults) != projection([via([])], defaults)
 
 
+def test_mpp_generated_subshape_group_order_is_ignored_but_membership_is_not():
+    def state(order, group='g'):
+        base = mpp_cache_records()
+        base.append(dict(kind='figGroup', name='g', ordered=True, type='none',
+                         origin=[0, 0], orient='R0', memberCount=1, props=[]))
+        base[2]['group'] = group
+        base[2]['groupOrder'] = order
+        return canonicalize(base)
+    assert (via_default_projection(state(0), {}, mpp_connectivity=True)[0]
+            == via_default_projection(state(9), {}, mpp_connectivity=True)[0])
+    assert (via_default_projection(state(0), {}, mpp_connectivity=True)[0]
+            != via_default_projection(state(0, 'other'), {}, mpp_connectivity=True)[0])
+
+
 def mpp_cache_records():
     return [dict(kind='net', name='N', props=[]),
             dict(kind='path', layerName='ACT', purpose='drawing', points=[[0, 0], [100, 0]],

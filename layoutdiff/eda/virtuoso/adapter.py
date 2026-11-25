@@ -554,9 +554,48 @@ def render(snapshot, *, review_token=None):
     commands += mpp_properties
     # All members (including nested groups) must exist before attachment. Native
     # ordered groups append members, independent of geometry creation order.
-    for key, r in sorted(((k, r) for k, r in snapshot["objects"].items() if r.get("group")),
+    objects = snapshot["objects"]
+
+    def attach_command(key, r, detach=False):
+        group = sk(r['group'])
+        figure = f"figures[{sk(key)}]"
+        detach_code = ""
+        if detach:
+            rod = f"aldMPPs[{sk(r['mpp']['name'])}]"
+            # Adding an MPP master also adds its generated subShapes to the same
+            # figGroup. Detach them, then re-add only the subShapes recorded as
+            # members; otherwise their explicit dbAddFigToFigGroup fails with
+            # "Fig already belongs to a figGroup".
+            detach_code = (f" foreach(sub {rod}~>subShapes "
+                           f"when(sub~>figGroup==groups[{group}] "
+                           f"unless(dbRemoveFigFromFigGroup(groups[{group}] sub) "
+                           f"error(\"MPP subShape detach failed\"))))")
+        return (f"let((fg) fg={figure}~>figGroup "
+                f"if(fg "
+                f"then unless(fg==groups[{group}] error(\"Figure already belongs to another figGroup: {key}\")) "
+                f"else progn(unless(dbAddFigToFigGroup(groups[{group}] {figure}) error(\"Group assignment failed\"))"
+                f"{detach_code})))")
+
+    # Re-add each master's generated subShape run in its captured order.
+    master_groups = {r['mpp']['name']: r.get('group') for r in objects.values() if r.get('mpp')}
+    subs_by_master = {}
+    for k, r in objects.items():
+        if r.get('group') and r.get('mppOwner'):
+            subs_by_master.setdefault(r['mppOwner'], []).append((r.get('groupOrder', 0), k))
+    handled_subs = set()
+    for key, r in sorted(((k, r) for k, r in objects.items() if r.get("group")),
                          key=lambda item: (item[1]["group"], item[1].get("groupOrder", 0), item[0])):
-        commands.append(f"unless(dbAddFigToFigGroup(groups[{sk(r['group'])}] figures[{sk(key)}]) error(\"Group assignment failed\"))")
+        owner = r.get('mppOwner')
+        if owner and master_groups.get(owner) == r.get('group'):
+            if key in handled_subs:
+                continue
+            run = [(order, k) for order, k in subs_by_master.get(owner, [])
+                   if objects[k].get('group') == r.get('group')]
+            for _, member in sorted(run):
+                commands.append(attach_command(member, objects[member]))
+                handled_subs.add(member)
+            continue
+        commands.append(attach_command(key, r, detach=bool(r.get('mpp'))))
     for key, r in sorted(snapshot['objects'].items()):
         if r['kind'] == 'group':
             for member in r['members']:
